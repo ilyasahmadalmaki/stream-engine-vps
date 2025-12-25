@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamEngine - VPS Automation</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <header>
+        <div class="brand">StreamEngine v1.0</div>
+        <div class="stats-bar" id="system-stats">
+            Loading Stats...
+        </div>
+        <div class="clock" id="digital-clock">00:00:00</div>
+    </header>
+
+    <div class="container">
+        
+        <section>
+            <div class="section-header">
+                <h2>Active Streams</h2>
+                <button onclick="openModal('modal-stream')">+ New Stream</button>
+            </div>
+            <div class="card-grid" id="streams-list">
+                </div>
+        </section>
+
+        <hr>
+
+        <section>
+            <div class="section-header">
+                <h2>Video Gallery</h2>
+                <div>
+                    <button onclick="document.getElementById('file-input').click()">Upload Local</button>
+                    <button onclick="openModal('modal-import')">Import Link</button>
+                </div>
+                <input type="file" id="file-input" style="display:none" onchange="uploadVideo(this)">
+            </div>
+            <div class="video-list" id="video-list">
+                </div>
+        </section>
+
+    </div>
+
+    <div id="modal-stream" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modal-stream')">&times;</span>
+            <h3>Konfigurasi Stream</h3>
+            <form id="stream-form" onsubmit="createStream(event)">
+                <input type="text" name="title" placeholder="Stream Title" required>
+                <input type="text" name="rtmp_url" placeholder="RTMP URL (rtmp://a.rtmp.youtube...)" required>
+                <input type="text" name="stream_key" placeholder="Stream Key" required>
+                
+                <label>Pilih Video:</label>
+                <select name="video_id" id="video-select" required></select>
+
+                <label>Mode Jadwal:</label>
+                <select name="schedule_type" onchange="toggleScheduleInputs(this.value)">
+                    <option value="once">Sekali Jalan (Once)</option>
+                    <option value="daily">Harian (Daily Auto)</option>
+                </select>
+
+                <div id="input-once">
+                    <label>Start Time:</label>
+                    <input type="datetime-local" name="start_time">
+                    <label>End Time:</label>
+                    <input type="datetime-local" name="end_time">
+                </div>
+
+                <div id="input-daily" style="display:none;">
+                    <label>Jam Mulai (Contoh 08:00):</label>
+                    <input type="time" name="daily_start_time">
+                    <label>Durasi (Jam):</label>
+                    <input type="number" name="daily_duration_hours" min="1" max="24">
+                </div>
+
+                <button type="submit" class="btn-primary">Simpan Jadwal</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-import" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeModal('modal-import')">&times;</span>
+            <h3>Import External Video</h3>
+            <form onsubmit="importVideo(event)">
+                <input type="text" name="title" placeholder="Video Title" required>
+                <input type="url" name="url" placeholder="Direct Video URL (GDrive/Direct Link)" required>
+                <button type="submit">Import</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
