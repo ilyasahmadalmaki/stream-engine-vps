@@ -40,18 +40,30 @@
         td { padding: 15px; border-bottom: 1px solid var(--border); vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
         tr:hover { background: #263345; }
-        .thumb-box { width: 100px; height: 56px; background: #000; border-radius: 6px; overflow: hidden; position: relative; }
+        .thumb-box { width: 100px; height: 56px; background: #000; border-radius: 6px; overflow: hidden; position: relative; cursor: pointer; transition: 0.2s; }
+        .thumb-box:hover { transform: scale(1.05); box-shadow: 0 0 10px rgba(59, 130, 246, 0.5); }
+        .thumb-box::after { content: '▶'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 1.2rem; text-shadow: 0 2px 4px rgba(0,0,0,0.8); opacity: 0.8; }
         .thumb-img { width: 100%; height: 100%; object-fit: cover; }
         .video-meta { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 999; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
         .modal.show { opacity: 1; }
-        .modal-content { background: var(--bg-card); width: 500px; max-width: 90%; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); padding: 30px; transform: translateY(20px); transition: transform 0.3s; }
+        .modal-content { background: var(--bg-card); width: 500px; max-width: 90%; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); padding: 30px; transform: translateY(20px); transition: transform 0.3s; position: relative; }
         .modal.show .modal-content { transform: translateY(0); }
         .form-group { margin-bottom: 18px; }
         .form-label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: 500; color: var(--text-secondary); }
         .form-control { width: 100%; background: #0f172a; border: 1px solid var(--border); color: white; padding: 12px; border-radius: 8px; font-size: 0.95rem; transition: 0.2s; }
         .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
         .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        
+        /* PROGRESS BAR STYLE */
+        .progress-container { width: 100%; background: #020617; border-radius: 8px; padding: 3px; border: 1px solid var(--border); margin-top: 15px; display: none; }
+        .progress-bar { height: 10px; background: var(--accent); border-radius: 6px; width: 0%; transition: width 0.2s; }
+        .progress-text { font-size: 0.8rem; color: var(--text-secondary); text-align: center; margin-top: 5px; }
+
+        /* VIDEO PLAYER */
+        .close-btn { position: absolute; top: 10px; right: 15px; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; z-index: 10; }
+        .close-btn:hover { color: var(--danger); }
+        
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
         .toast { background: var(--bg-card); color: white; padding: 15px 20px; border-radius: 8px; border-left: 4px solid var(--accent); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 12px; min-width: 300px; animation: slideIn 0.3s ease; }
         .toast.error { border-left-color: var(--danger); }
@@ -100,7 +112,6 @@
             <div class="form-group"><label class="form-label">Judul Stream</label><input type="text" id="stream-title" class="form-control" placeholder="Nama Channel"></div>
             <div class="form-group"><label class="form-label">Stream Key</label><input type="password" id="stream-key" class="form-control" placeholder="xxxx-xxxx"></div>
             <div class="form-group"><label class="form-label">Pilih Video</label><select id="stream-video" class="form-control"></select></div>
-            
             <div class="form-group">
                 <label class="form-label">Mode Jadwal</label>
                 <select id="schedule-type" class="form-control" onchange="toggleScheduleType()">
@@ -109,19 +120,54 @@
                     <option value="once">📅 Sekali Jalan (One Time)</option>
                 </select>
             </div>
-
             <div id="time-settings" style="display:none; border-top:1px dashed var(--border); padding-top:15px; margin-top:15px;">
                 <div id="input-daily" class="form-group"><label class="form-label">Jam Mulai (Harian)</label><input type="time" id="daily-start" class="form-control"></div>
                 <div id="input-once" class="form-group" style="display:none"><label class="form-label">Waktu Mulai</label><input type="datetime-local" id="once-start" class="form-control"></div>
                 <div class="form-group"><label class="form-label">Durasi Live</label><div class="row-2"><input type="number" id="dur-h" class="form-control" placeholder="Jam" value="1"><input type="number" id="dur-m" class="form-control" placeholder="Menit" value="0"></div></div>
             </div>
-
             <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:30px;"><button class="btn btn-secondary" onclick="closeModal('modal-stream')">Cancel</button><button class="btn btn-primary" onclick="saveStream()">Save Schedule</button></div>
         </div>
     </div>
 
-    <div id="modal-upload" class="modal"><div class="modal-content"><h3>Upload Video</h3><div class="form-group"><input type="file" id="file-upload" class="form-control" accept=".mp4,.mkv,.mov"></div><button class="btn btn-primary" style="width:100%" onclick="uploadVideo()">Start Upload 🚀</button></div></div>
-    <div id="modal-import" class="modal"><div class="modal-content"><h3>Import GDrive</h3><div class="form-group"><input type="text" id="gdrive-url" class="form-control" placeholder="https://drive..."></div><button class="btn btn-primary" style="width:100%" onclick="importVideo()">Download ☁</button></div></div>
+    <div id="modal-upload" class="modal">
+        <div class="modal-content">
+            <h3>Upload Video Local</h3>
+            <p style="color:var(--text-secondary); margin-bottom:20px;">Pilih file MP4/MKV dari komputer Anda.</p>
+            <div class="form-group">
+                <input type="file" id="file-upload" class="form-control" accept=".mp4,.mkv,.mov">
+            </div>
+            <div id="upload-progress-container" class="progress-container">
+                <div id="upload-progress-bar" class="progress-bar"></div>
+            </div>
+            <div id="upload-progress-text" class="progress-text" style="display:none">0%</div>
+            <button id="btn-upload-local" class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="uploadVideoLocal()">Start Upload 🚀</button>
+        </div>
+    </div>
+
+    <div id="modal-import" class="modal">
+        <div class="modal-content">
+            <h3>Import Google Drive</h3>
+            <p style="color:var(--text-secondary); margin-bottom:20px;">Pastikan link aksesnya "Anyone with the link".</p>
+            <div class="form-group">
+                <input type="text" id="gdrive-url" class="form-control" placeholder="https://drive.google.com/file/d/...">
+            </div>
+            <div id="import-status" style="display:none; margin-top:10px; padding:10px; background:rgba(59,130,246,0.1); border-radius:6px; color:var(--accent); font-size:0.9rem; text-align:center;">
+                ⏳ Sedang mendownload ke VPS...<br>
+                <span style="font-size:0.8rem; opacity:0.8">(Bisa memakan waktu lama tergantung ukuran file)</span>
+            </div>
+            <button id="btn-import-drive" class="btn btn-primary" style="width:100%" onclick="importVideoDrive()">Download to VPS ☁</button>
+        </div>
+    </div>
+
+    <div id="modal-player" class="modal">
+        <div class="modal-content" style="width: 800px; padding:0; background:black; overflow:hidden;">
+            <button class="close-btn" onclick="closePlayer()">×</button>
+            <video id="video-element" controls style="width:100%; height:auto; display:block;"></video>
+            <div style="padding:15px; background:var(--bg-card);">
+                <h4 id="video-player-title" style="margin:0; color:white;">Video Preview</h4>
+            </div>
+        </div>
+    </div>
 
     <script>
         function updateClock() { const now = new Date(); document.getElementById('digital-clock').innerText = now.toLocaleTimeString('id-ID', { hour12: false }); document.getElementById('date-display').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
@@ -139,26 +185,11 @@
             if(streams.length === 0) { container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); border:2px dashed var(--border); border-radius:12px;">Belum ada jadwal. Buat baru yuk!</div>`; return; }
             streams.forEach(s => {
                 let badgeClass = 'status-offline'; let statusText = s.status;
-                if(s.status === 'live') { 
-                    badgeClass = 'status-live'; 
-                    statusText = s.is_manual_run ? '● LIVE (MANUAL)' : '● LIVE NOW'; 
-                } else if(s.status === 'scheduled') { 
-                    badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; 
-                }
-                
-                if (s.schedule_type === 'manual' && s.status !== 'live') {
-                    badgeClass = 'status-manual'; statusText = '🎛 MANUAL MODE';
-                }
+                if(s.status === 'live') { badgeClass = 'status-live'; statusText = s.is_manual_run ? '● LIVE (MANUAL)' : '● LIVE NOW'; }
+                else if(s.status === 'scheduled') { badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; }
+                if (s.schedule_type === 'manual' && s.status !== 'live') { badgeClass = 'status-manual'; statusText = '🎛 MANUAL MODE'; }
 
-                let timeDisplay = '';
-                if(s.schedule_type === 'manual') {
-                    timeDisplay = '<span style="color:var(--text-secondary)">-- Tidak ada jadwal --</span>';
-                } else if(s.schedule_type === 'daily') {
-                    timeDisplay = `<span style="color:var(--accent)">🔁 Daily:</span> ${s.daily_start_time}`;
-                } else {
-                    timeDisplay = `📅 ${new Date(s.start_time).toLocaleString('id-ID')}`;
-                }
-                
+                let timeDisplay = s.schedule_type === 'manual' ? '<span style="color:var(--text-secondary)">-- Tidak ada jadwal --</span>' : (s.schedule_type === 'daily' ? `<span style="color:var(--accent)">🔁 Daily:</span> ${s.daily_start_time}` : `📅 ${new Date(s.start_time).toLocaleString('id-ID')}`);
                 const nextRun = s.schedule_type === 'manual' ? '-' : new Date(s.next_start_time).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
 
                 container.innerHTML += `
@@ -175,19 +206,33 @@
             });
         }
 
-        async function fetchVideos() { try { const res = await fetch('/api/videos'); const videos = await res.json(); const tbody = document.getElementById('video-table-body'); const select = document.getElementById('stream-video'); tbody.innerHTML = ''; select.innerHTML = ''; videos.forEach(v => { const opt = document.createElement('option'); opt.value = v.id; opt.innerText = v.title; select.appendChild(opt); const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); tbody.innerHTML += `<tr><td><div class="thumb-box"><img src="${v.thumbnail_path || ''}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'"></div></td><td><div style="font-weight:600; font-size:0.95rem">${v.title}</div><div class="video-meta">${v.source_type} • ${sizeMB} MB</div></td><td><span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">${v.file_size > 0 ? 'Ready' : 'Corrupt'}</span></td><td style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')">✏ Rename</button><button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button></td></tr>`; }); } catch(e) {} }
+        async function fetchVideos() { try { const res = await fetch('/api/videos'); const videos = await res.json(); const tbody = document.getElementById('video-table-body'); const select = document.getElementById('stream-video'); tbody.innerHTML = ''; select.innerHTML = ''; videos.forEach(v => { const opt = document.createElement('option'); opt.value = v.id; opt.innerText = v.title; select.appendChild(opt); const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); 
+            
+            // LOGIKA PREVIEW PLAYER
+            // Backend menyimpan path lengkap: /root/app/uploads/video.mp4
+            // Kita ambil filename saja: video.mp4
+            const filename = v.file_path.split('/').pop() || v.file_path.split('\\').pop();
+            const safeTitle = v.title.replace(/'/g, "\\'"); // Escape petik satu
+
+            tbody.innerHTML += `<tr>
+                <td>
+                    <div class="thumb-box" onclick="playVideo('${filename}', '${safeTitle}')">
+                        <img src="${v.thumbnail_path || ''}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'">
+                    </div>
+                </td>
+                <td><div style="font-weight:600; font-size:0.95rem">${v.title}</div><div class="video-meta">${v.source_type} • ${sizeMB} MB</div></td>
+                <td><span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">${v.file_size > 0 ? 'Ready' : 'Corrupt'}</span></td>
+                <td style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${safeTitle}')">✏ Rename</button><button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button></td>
+            </tr>`; }); } catch(e) {} }
 
         async function startStream(id) {
             const s = currentStreams.find(x => x.id === id);
             let payload = { manual: true, permanent: false };
-            
-            // JIKA MASIH PUNYA JADWAL, TANYA USER
             if (s && s.schedule_type !== 'manual') { 
                 const msg = `⚠️ PERINGATAN UBAH MODE\n\nStream "${s.title}" memiliki Jadwal Otomatis.\n\nKlik OK untuk mengubah stream ini menjadi:\n👉 MODE MANUAL (PERMANEN)\n\nJadwal lama akan dihapus. Yakin?`;
                 if (!confirm(msg)) return;
                 payload.permanent = true;
             }
-
             showToast('Menyalakan mesin... 🚀');
             const res = await fetch(`/api/streams/${id}/start`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
             const json = await res.json();
@@ -201,18 +246,60 @@
         async function deleteStream(id) { if(!confirm('Hapus jadwal ini?')) return; await fetch(`/api/streams/${id}`, {method:'DELETE'}); fetchStreams(); }
         async function renameVideo(id, old) { const n = prompt("Judul Baru:", old); if(n && n!==old) { await fetch(`/api/videos/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:n})}); fetchVideos(); }}
         async function deleteVideo(id) { if(!confirm('Hapus file video?')) return; await fetch(`/api/videos/${id}`, {method:'DELETE'}); fetchVideos(); }
-        async function uploadVideo() { const f = document.getElementById('file-upload').files[0]; if(!f) return showToast('Pilih file', 'error'); const d = new FormData(); d.append('video', f); showToast('Upload berjalan...', 'warning'); const r = await fetch('/api/videos/upload', {method:'POST', body:d}); const j = await r.json(); if(j.success){ showToast('Sukses!'); closeModal('modal-upload'); fetchVideos(); } else showToast(j.error, 'error'); }
         
-        function toggleScheduleType() { 
-            const t = document.getElementById('schedule-type').value; 
-            const timeArea = document.getElementById('time-settings');
-            if (t === 'manual') { timeArea.style.display = 'none'; } 
-            else { 
-                timeArea.style.display = 'block'; 
-                document.getElementById('input-daily').style.display = t === 'daily'?'block':'none'; 
-                document.getElementById('input-once').style.display = t === 'once'?'block':'none'; 
-            }
+        function uploadVideoLocal() {
+            const file = document.getElementById('file-upload').files[0];
+            if(!file) return showToast('Pilih file dulu', 'error');
+            const formData = new FormData();
+            formData.append('video', file);
+            const pBar = document.getElementById('upload-progress-bar');
+            const pContainer = document.getElementById('upload-progress-container');
+            const pText = document.getElementById('upload-progress-text');
+            const btn = document.getElementById('btn-upload-local');
+            pContainer.style.display = 'block'; pText.style.display = 'block'; btn.disabled = true; btn.innerText = 'Uploading...';
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/api/videos/upload', true);
+            xhr.upload.onprogress = function(e) { if (e.lengthComputable) { const percentComplete = (e.loaded / e.total) * 100; pBar.style.width = percentComplete + '%'; pText.innerText = Math.round(percentComplete) + '%'; } };
+            xhr.onload = function() { if (xhr.status === 200) { showToast('Upload Selesai!'); closeModal('modal-upload'); fetchVideos(); } else { showToast('Upload Gagal', 'error'); } btn.disabled = false; btn.innerText = 'Start Upload 🚀'; pContainer.style.display = 'none'; pText.style.display = 'none'; pBar.style.width = '0%'; };
+            xhr.onerror = function() { showToast('Network Error', 'error'); btn.disabled = false; };
+            xhr.send(formData);
         }
+
+        async function importVideoDrive() {
+            const url = document.getElementById('gdrive-url').value;
+            if(!url) return showToast('Masukkan URL Drive', 'error');
+            const btn = document.getElementById('btn-import-drive');
+            const statusBox = document.getElementById('import-status');
+            btn.disabled = true; btn.innerText = 'Downloading di Server...'; statusBox.style.display = 'block';
+            try {
+                const res = await fetch('/api/videos/import', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url }) });
+                const json = await res.json();
+                if(json.success) { showToast('Download Selesai!'); closeModal('modal-import'); fetchVideos(); } else { showToast(json.error, 'error'); }
+            } catch (e) { showToast('Error koneksi', 'error'); }
+            btn.disabled = false; btn.innerText = 'Download to VPS ☁'; statusBox.style.display = 'none';
+        }
+
+        // --- VIDEO PLAYER LOGIC ---
+        function playVideo(filename, title) {
+            const player = document.getElementById('video-element');
+            const titleEl = document.getElementById('video-player-title');
+            
+            // Set Source (Asumsi server serve /uploads route)
+            player.src = '/uploads/' + filename;
+            titleEl.innerText = title;
+            
+            openModal('modal-player');
+            player.play();
+        }
+
+        function closePlayer() {
+            const player = document.getElementById('video-element');
+            player.pause();
+            player.src = ""; // Clear buffer
+            closeModal('modal-player');
+        }
+
+        function toggleScheduleType() { const t = document.getElementById('schedule-type').value; const timeArea = document.getElementById('time-settings'); if (t === 'manual') { timeArea.style.display = 'none'; } else { timeArea.style.display = 'block'; document.getElementById('input-daily').style.display = t === 'daily'?'block':'none'; document.getElementById('input-once').style.display = t === 'once'?'block':'none'; } }
         function openModal(id) { const el = document.getElementById(id); el.style.display = 'flex'; setTimeout(() => el.classList.add('show'), 10); if(id === 'modal-stream' && !document.getElementById('edit-stream-id').value) { toggleScheduleType(); } }
         function closeModal(id) { const el = document.getElementById(id); el.classList.remove('show'); setTimeout(() => { el.style.display = 'none'; if(id==='modal-stream'){ document.getElementById('edit-stream-id').value=''; document.getElementById('stream-title').value=''; document.getElementById('stream-key').value=''; } }, 300); }
 

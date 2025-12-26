@@ -12,11 +12,20 @@ const storage = require('./src/storage');
 const mediaUtils = require('./src/mediaUtils');
 
 require('dotenv').config();
+
+// --- INIT: PASTIKAN DIRECTORY ADA ---
 storage.ensureDirectories();
+const uploadDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+    console.log("[INIT] Folder 'uploads' berhasil dibuat.");
+}
 
 // --- DATABASE MIGRATION (AUTO ADD COLUMN) ---
+// Menambahkan kolom 'is_manual_run' jika belum ada
 const initDb = () => {
     db.run("ALTER TABLE streams ADD COLUMN is_manual_run BOOLEAN DEFAULT 0", (err) => {
+        // Error diabaikan karena berarti kolom sudah ada (aman)
         if (!err) console.log("[DB] Kolom 'is_manual_run' siap.");
     });
 };
@@ -29,6 +38,7 @@ app.use(express.json());
 app.use(express.static('public'));
 app.use('/uploads', express.static('uploads'));
 
+// --- MULTER CONFIG ---
 const multerStorage = multer.diskStorage({
     destination: storage.paths.videos,
     filename: (req, file, cb) => {
@@ -71,25 +81,42 @@ app.post('/api/videos/upload', upload.single('video'), async (req, res) => {
     }
 });
 
+// ROUTE IMPORT BARU (SUPPORT CODE AXIOS YANG BARU)
 app.post('/api/videos/import', async (req, res) => {
     try {
         const { url } = req.body;
-        const fileId = gdrive.extractFileId(url);
-        const result = await gdrive.downloadFile(fileId);
         
+        // 1. Validasi URL & ID
+        const fileId = gdrive.extractFileId(url);
+        if (!fileId) return res.status(400).json({error: "Link Google Drive tidak valid/tidak ditemukan ID."});
+
+        console.log(`[IMPORT] Request import ID: ${fileId}`);
+
+        // 2. Download File (Dengan Callback Progress Log)
+        // Kita log progress di console VPS agar terpantau
+        const result = await gdrive.downloadFile(fileId, (progress) => {
+            if (progress % 10 === 0) { // Log tiap kelipatan 10%
+                console.log(`[GDRIVE PROGRESS] ${progress}%`);
+            }
+        });
+        
+        // 3. Generate Thumbnail
         const thumbName = result.filename.replace(path.extname(result.filename), '.jpg');
         const thumbPathFull = await mediaUtils.generateThumbnail(result.localFilePath, thumbName);
         const thumbPathRel = thumbPathFull ? path.join('uploads', thumbName) : null;
 
+        // 4. Simpan ke Database
         db.run(`INSERT INTO videos (title, file_path, thumbnail_path, source_type, file_size) VALUES (?, ?, ?, 'imported', ?)`,
             [result.filename, result.localFilePath, thumbPathRel, result.fileSize],
             function(err) {
                 if(err) return res.status(500).json({error: err.message});
+                console.log(`[IMPORT] Database updated for ${result.filename}`);
                 res.json({success: true});
             }
         );
     } catch (error) {
-        res.status(500).json({error: error.message});
+        console.error("[IMPORT ROUTE ERROR]", error.message);
+        res.status(500).json({error: error.message}); // Kirim pesan error detail ke frontend
     }
 });
 
@@ -174,6 +201,8 @@ app.post('/api/streams', (req, res) => {
             const totalMinutes = (parseInt(duration_hours || 0) * 60) + parseInt(duration_minutes || 0);
 
             let nextStart = null, nextEnd = null;
+            
+            // LOGIKA NEXT START BERDASARKAN TIPE JADWAL
             if (schedule_type === 'once') {
                 nextStart = start_time;
                 nextEnd = end_time;
@@ -189,6 +218,7 @@ app.post('/api/streams', (req, res) => {
                 endD.setMinutes(endD.getMinutes() + totalMinutes);
                 nextEnd = endD.toISOString();
             }
+            // Jika Manual, nextStart & nextEnd biarkan null
 
             const query = `INSERT INTO streams (
                 title, rtmp_url, stream_key, video_id, schedule_type, 
@@ -284,6 +314,7 @@ app.post('/api/streams/:id/start', (req, res) => {
 
                 if (permanent) {
                     // KASUS 1: Ubah Permanen jadi Manual (Hapus Jadwal)
+                    // Kita set semua waktu jadi NULL biar bersih
                     query = `UPDATE streams SET 
                         status = 'live', 
                         is_manual_run = 1, 
@@ -296,7 +327,7 @@ app.post('/api/streams/:id/start', (req, res) => {
                         WHERE id = ?`;
                     params = [id];
                 } else {
-                    // KASUS 2: Manual Biasa / Memang sudah manual
+                    // KASUS 2: Manual Biasa / Memang sudah manual dari awal
                     const isManual = (manual || stream.schedule_type === 'manual') ? 1 : 0;
                     query = "UPDATE streams SET status = 'live', is_manual_run = ? WHERE id = ?";
                     params = [isManual, id];
@@ -319,7 +350,7 @@ app.post('/api/streams/:id/stop', (req, res) => {
 
         streamManager.stopStreamProcess(id, true);
 
-        // Reset Manual Flag jika masih Daily/Once
+        // Reset Manual Flag jika masih Daily/Once (untuk hitung jadwal berikutnya)
         if (stream.schedule_type === 'daily') {
             const timeParts = stream.daily_start_time.split(':');
             const targetHour = parseInt(timeParts[0]);
@@ -327,7 +358,14 @@ app.post('/api/streams/:id/stop', (req, res) => {
             const now = new Date();
             const nextStart = new Date(now);
             nextStart.setHours(targetHour, targetMinute, 0, 0);
-            if (now < nextStart) {} else { nextStart.setDate(nextStart.getDate() + 1); }
+            
+            // Logika Midnight Crossing
+            if (now < nextStart) {
+                // Next run is today
+            } else {
+                nextStart.setDate(nextStart.getDate() + 1); // Besok
+            }
+            
             const durationMinutes = parseInt(stream.daily_duration_minutes) || 0;
             const nextEndDate = new Date(nextStart);
             nextEndDate.setMinutes(nextEndDate.getMinutes() + durationMinutes);
