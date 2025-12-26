@@ -14,6 +14,14 @@ const mediaUtils = require('./src/mediaUtils');
 require('dotenv').config();
 storage.ensureDirectories();
 
+// --- DATABASE MIGRATION (AUTO ADD COLUMN) ---
+const initDb = () => {
+    db.run("ALTER TABLE streams ADD COLUMN is_manual_run BOOLEAN DEFAULT 0", (err) => {
+        if (!err) console.log("[DB] Kolom 'is_manual_run' siap.");
+    });
+};
+setTimeout(initDb, 2000);
+
 const app = express();
 const PORT = process.env.PORT || 7000;
 
@@ -85,7 +93,6 @@ app.post('/api/videos/import', async (req, res) => {
     }
 });
 
-// CONVERT DENGAN FIX KEYFRAME (YOUTUBE FRIENDLY)
 app.post('/api/videos/:id/convert', (req, res) => {
     const id = req.params.id;
     db.get("SELECT * FROM videos WHERE id = ?", [id], (err, video) => {
@@ -94,20 +101,12 @@ app.post('/api/videos/:id/convert', (req, res) => {
         const inputPath = video.file_path;
         const tempPath = inputPath + '_temp_convert.mp4';
         
-        console.log(`[CONVERT] Starting Fix/Convert for: ${video.title}`);
-
         const ffmpeg = spawn('ffmpeg', [
             '-y', '-i', inputPath, 
-            '-c:v', 'libx264', 
-            '-preset', 'fast',
-            '-crf', '23',
-            '-g', '60',          // Keyframe interval 2 detik (wajib buat YT)
-            '-keyint_min', '60',
-            '-sc_threshold', '0',
-            '-force_key_frames', 'expr:gte(t,n_forced*2)',
+            '-c:v', 'libx264', '-preset', 'fast', '-crf', '23',
+            '-g', '60', '-keyint_min', '60', '-sc_threshold', '0', '-force_key_frames', 'expr:gte(t,n_forced*2)',
             '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
-            '-movflags', '+faststart', 
-            tempPath
+            '-movflags', '+faststart', tempPath
         ]);
 
         ffmpeg.on('close', async (code) => {
@@ -118,9 +117,7 @@ app.post('/api/videos/:id/convert', (req, res) => {
                     const newStats = fs.statSync(inputPath);
                     const thumbName = path.basename(inputPath).replace(path.extname(inputPath), '.jpg');
                     await mediaUtils.generateThumbnail(inputPath, thumbName);
-
                     db.run("UPDATE videos SET file_size = ? WHERE id = ?", [newStats.size, id]);
-                    console.log(`[CONVERT] Success: ${video.title}`);
                     res.json({success: true});
                 } catch (e) { res.status(500).json({error: "File swap failed"}); }
             } else {
@@ -160,7 +157,6 @@ app.get('/api/streams/:id', (req, res) => {
     });
 });
 
-// CREATE STREAM (STRICT VALIDATION)
 app.post('/api/streams', (req, res) => {
     const { 
         title, stream_key, video_id, schedule_type, 
@@ -177,17 +173,15 @@ app.post('/api/streams', (req, res) => {
             const rtmp_url = "rtmp://a.rtmp.youtube.com/live2";
             const totalMinutes = (parseInt(duration_hours || 0) * 60) + parseInt(duration_minutes || 0);
 
-            let nextStart, nextEnd;
+            let nextStart = null, nextEnd = null;
             if (schedule_type === 'once') {
                 nextStart = start_time;
                 nextEnd = end_time;
-            } else {
+            } else if (schedule_type === 'daily') {
                 const [h, m] = daily_start_time.split(':');
                 const now = new Date();
                 const d = new Date();
                 d.setHours(h, m, 0, 0);
-                // Kalau jam target < jam sekarang, set besok.
-                // TAPI: Ini hanya untuk inisialisasi awal. Logika Scheduler nanti yang handle looping.
                 if (d < now) d.setDate(d.getDate() + 1);
                 nextStart = d.toISOString();
                 
@@ -199,8 +193,8 @@ app.post('/api/streams', (req, res) => {
             const query = `INSERT INTO streams (
                 title, rtmp_url, stream_key, video_id, schedule_type, 
                 start_time, end_time, daily_start_time, daily_duration_minutes,
-                next_start_time, next_end_time, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled')`;
+                next_start_time, next_end_time, status, is_manual_run
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', 0)`;
 
             db.run(query, [
                 title, rtmp_url, stream_key, video_id, schedule_type,
@@ -214,7 +208,6 @@ app.post('/api/streams', (req, res) => {
     });
 });
 
-// UPDATE STREAM (AUTO WAKEUP & STRICT VALIDATION)
 app.put('/api/streams/:id', (req, res) => {
     const id = req.params.id;
     const { 
@@ -235,29 +228,27 @@ app.put('/api/streams/:id', (req, res) => {
 
                 const totalMinutes = (parseInt(duration_hours || 0) * 60) + parseInt(duration_minutes || 0);
                 
-                let nextStart, nextEnd;
+                let nextStart = null, nextEnd = null;
                 if (schedule_type === 'once') {
                     nextStart = start_time;
                     nextEnd = end_time;
-                } else {
+                } else if (schedule_type === 'daily') {
                     const [h, m] = daily_start_time.split(':');
                     const now = new Date();
                     const d = new Date();
                     d.setHours(h, m, 0, 0);
                     if (d < now) d.setDate(d.getDate() + 1);
                     nextStart = d.toISOString();
-                    
                     const endD = new Date(d);
                     endD.setMinutes(endD.getMinutes() + totalMinutes);
                     nextEnd = endD.toISOString();
                 }
 
-                // Paksa status jadi 'scheduled' biar bangun lagi kalau offline
                 const query = `UPDATE streams SET 
                     title=?, stream_key=?, video_id=?, schedule_type=?, 
                     start_time=?, end_time=?, daily_start_time=?, daily_duration_minutes=?,
                     next_start_time=?, next_end_time=?,
-                    status = 'scheduled' 
+                    status = 'scheduled', is_manual_run = 0 
                     WHERE id=?`;
 
                 db.run(query, [
@@ -273,8 +264,11 @@ app.put('/api/streams/:id', (req, res) => {
     });
 });
 
+// START STREAM (DENGAN LOGIKA PERMANENT MANUAL SWITCH)
 app.post('/api/streams/:id/start', (req, res) => {
     const id = req.params.id;
+    const { manual, permanent } = req.body; // Terima flag dari frontend
+
     db.get("SELECT s.*, v.file_path FROM streams s LEFT JOIN videos v ON s.video_id = v.id WHERE s.id = ?", [id], (err, stream) => {
         if(stream) {
             if (!fs.existsSync(stream.file_path)) return res.status(400).json({error: "Video file missing!"});
@@ -283,61 +277,70 @@ app.post('/api/streams/:id/start', (req, res) => {
                 if(conflict) return res.status(400).json({error: "CRITICAL: Stream Key ini sedang dipakai LIVE!"});
                 
                 streamManager.startStreamProcess(stream, stream.file_path);
-                db.run("UPDATE streams SET status = 'live' WHERE id = ?", [id]);
-                res.json({success: true});
+                
+                // Tentukan Query Update
+                let query = "";
+                let params = [];
+
+                if (permanent) {
+                    // KASUS 1: Ubah Permanen jadi Manual (Hapus Jadwal)
+                    query = `UPDATE streams SET 
+                        status = 'live', 
+                        is_manual_run = 1, 
+                        schedule_type = 'manual',
+                        daily_start_time = NULL,
+                        start_time = NULL,
+                        end_time = NULL,
+                        next_start_time = NULL,
+                        next_end_time = NULL
+                        WHERE id = ?`;
+                    params = [id];
+                } else {
+                    // KASUS 2: Manual Biasa / Memang sudah manual
+                    const isManual = (manual || stream.schedule_type === 'manual') ? 1 : 0;
+                    query = "UPDATE streams SET status = 'live', is_manual_run = ? WHERE id = ?";
+                    params = [isManual, id];
+                }
+
+                db.run(query, params, function(err) {
+                    if(err) return res.status(500).json({error: err.message});
+                    res.json({success: true});
+                });
             });
         } else res.status(404).json({error: "Not found"});
     });
 });
 
-// MANUAL STOP DENGAN LOGIKA MIDNIGHT YANG BENAR
 app.post('/api/streams/:id/stop', (req, res) => {
     const id = req.params.id;
 
     db.get("SELECT * FROM streams WHERE id = ?", [id], (err, stream) => {
         if(err || !stream) return res.status(404).json({error: "Stream not found"});
 
-        // 1. Matikan Proses (Keep Status DB)
         streamManager.stopStreamProcess(id, true);
 
-        // 2. Logika Reschedule (Smart Midnight Fix)
+        // Reset Manual Flag jika masih Daily/Once
         if (stream.schedule_type === 'daily') {
             const timeParts = stream.daily_start_time.split(':');
             const targetHour = parseInt(timeParts[0]);
             const targetMinute = parseInt(timeParts[1]);
-            
             const now = new Date();
             const nextStart = new Date(now);
             nextStart.setHours(targetHour, targetMinute, 0, 0);
-
-            // LOGIKA KUNCI: 
-            // Cek apakah 'sekarang' sudah melewati jam target hari ini?
-            // Kasus 00:30 (Now) vs 23:30 (Target) -> Now < Target -> Berarti Next = HARI INI (Tgl 27)
-            // Kasus 09:00 (Now) vs 08:00 (Target) -> Now > Target -> Berarti Next = BESOK (Tgl 28)
-            if (now < nextStart) {
-                // Jangan tambah hari (Jadwal masih nanti malam)
-            } else {
-                nextStart.setDate(nextStart.getDate() + 1); // Tambah 1 hari
-            }
-
+            if (now < nextStart) {} else { nextStart.setDate(nextStart.getDate() + 1); }
             const durationMinutes = parseInt(stream.daily_duration_minutes) || 0;
             const nextEndDate = new Date(nextStart);
             nextEndDate.setMinutes(nextEndDate.getMinutes() + durationMinutes);
 
-            db.run("UPDATE streams SET next_start_time = ?, next_end_time = ?, status = 'scheduled' WHERE id = ?",
+            db.run("UPDATE streams SET next_start_time = ?, next_end_time = ?, status = 'scheduled', is_manual_run = 0 WHERE id = ?",
                 [nextStart.toISOString(), nextEndDate.toISOString(), id],
-                (err) => {
-                    if(err) return res.status(500).json({error: err.message});
-                    res.json({success: true});
-                }
-            );
+                (err) => { res.json({success: true}); });
 
+        } else if (stream.schedule_type === 'once') {
+            db.run("UPDATE streams SET status = 'scheduled', is_manual_run = 0 WHERE id = ?", [id], (err) => { res.json({success: true}); });
         } else {
-            // Once mode: Balik ke scheduled (ready to start again)
-            db.run("UPDATE streams SET status = 'scheduled' WHERE id = ?", [id], (err) => {
-                if(err) return res.status(500).json({error: err.message});
-                res.json({success: true});
-            });
+            // MANUAL TYPE: Cukup set scheduled/offline (is_manual_run 0 agar bersih)
+            db.run("UPDATE streams SET status = 'scheduled', is_manual_run = 0 WHERE id = ?", [id], (err) => { res.json({success: true}); });
         }
     });
 });
@@ -348,11 +351,9 @@ app.delete('/api/streams/:id', (req, res) => {
     db.run("DELETE FROM streams WHERE id = ?", [id], (err) => res.json({success: true}));
 });
 
-// START SERVER & KILL ZOMBIES
+// START SERVER
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    exec('killall -9 ffmpeg', (err) => {
-        if(!err) console.log("[INIT] Cleared zombie streams.");
-    });
+    exec('killall -9 ffmpeg', (err) => { if(!err) console.log("[INIT] Cleared zombie streams."); });
     scheduler.runScheduler();
 });

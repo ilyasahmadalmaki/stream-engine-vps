@@ -6,59 +6,33 @@
     <title>StreamEngine PRO</title>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-dark: #0f172a;
-            --bg-card: #1e293b;
-            --text-primary: #f8fafc;
-            --text-secondary: #94a3b8;
-            --accent: #3b82f6;
-            --success: #22c55e;
-            --danger: #ef4444;
-            --warning: #eab308;
-            --border: #334155;
-        }
-
+        :root { --bg-dark: #0f172a; --bg-card: #1e293b; --text-primary: #f8fafc; --text-secondary: #94a3b8; --accent: #3b82f6; --success: #22c55e; --danger: #ef4444; --warning: #eab308; --border: #334155; }
         * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
         body { background-color: var(--bg-dark); color: var(--text-primary); font-family: 'Inter', sans-serif; padding: 20px; }
-        
-        /* HEADER */
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
-        .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -1px; }
-        .logo span { color: var(--accent); }
-        
+        .logo { font-size: 1.5rem; font-weight: 800; letter-spacing: -1px; } .logo span { color: var(--accent); }
         .header-right { text-align: right; }
         .clock { font-size: 1.5rem; font-weight: 800; font-family: 'JetBrains Mono', monospace; line-height: 1; }
         .date { font-size: 0.85rem; color: var(--text-secondary); margin-top: 5px; }
         .stats-box { margin-top:10px; display:inline-block; background: #020617; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--accent); }
-
-        /* BUTTONS */
         .btn { padding: 8px 16px; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 6px; }
         .btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
-        .btn:active { transform: translateY(0); }
         .btn-primary { background: var(--accent); color: white; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3); }
         .btn-danger { background: var(--danger); color: white; }
         .btn-success { background: var(--success); color: white; }
         .btn-secondary { background: var(--border); color: white; }
         .btn-sm { padding: 5px 10px; font-size: 0.8rem; }
-
-        /* STREAM CARDS GRID */
         .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 20px; margin-bottom: 50px; }
-        
         .card { background: var(--bg-card); border-radius: 12px; padding: 20px; border: 1px solid var(--border); position: relative; overflow: hidden; transition: 0.3s; }
         .card:hover { border-color: var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-        
         .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         .stream-title { font-weight: 700; font-size: 1.1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
-        
-        /* BADGES STATUS */
         .badge { padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
         .status-live { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); animation: pulse 2s infinite; }
         .status-scheduled { background: rgba(59, 130, 246, 0.1); color: var(--accent); border: 1px solid var(--accent); }
+        .status-manual { background: rgba(34, 197, 94, 0.1); color: var(--success); border: 1px solid var(--success); }
         .status-offline { background: #334155; color: var(--text-secondary); }
-
         .info-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-secondary); }
-
-        /* VIDEO LIBRARY TABLE */
         .section-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; }
         .table-container { background: var(--bg-card); border-radius: 12px; overflow: hidden; border: 1px solid var(--border); }
         table { width: 100%; border-collapse: collapse; }
@@ -66,56 +40,43 @@
         td { padding: 15px; border-bottom: 1px solid var(--border); vertical-align: middle; }
         tr:last-child td { border-bottom: none; }
         tr:hover { background: #263345; }
-        
         .thumb-box { width: 100px; height: 56px; background: #000; border-radius: 6px; overflow: hidden; position: relative; }
         .thumb-img { width: 100%; height: 100%; object-fit: cover; }
         .video-meta { font-size: 0.85rem; color: var(--text-secondary); margin-top: 4px; }
-
-        /* MODALS */
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); z-index: 999; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.3s; }
         .modal.show { opacity: 1; }
         .modal-content { background: var(--bg-card); width: 500px; max-width: 90%; border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); padding: 30px; transform: translateY(20px); transition: transform 0.3s; }
         .modal.show .modal-content { transform: translateY(0); }
-
         .form-group { margin-bottom: 18px; }
         .form-label { display: block; margin-bottom: 8px; font-size: 0.9rem; font-weight: 500; color: var(--text-secondary); }
         .form-control { width: 100%; background: #0f172a; border: 1px solid var(--border); color: white; padding: 12px; border-radius: 8px; font-size: 0.95rem; transition: 0.2s; }
         .form-control:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2); }
-        
         .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-
-        /* TOAST NOTIF */
         #toast-container { position: fixed; top: 20px; right: 20px; z-index: 2000; display: flex; flex-direction: column; gap: 10px; }
         .toast { background: var(--bg-card); color: white; padding: 15px 20px; border-radius: 8px; border-left: 4px solid var(--accent); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); display: flex; align-items: center; gap: 12px; min-width: 300px; animation: slideIn 0.3s ease; }
         .toast.error { border-left-color: var(--danger); }
         .toast.success { border-left-color: var(--success); }
-
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
         @keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
     </style>
 </head>
 <body>
-
     <div id="toast-container"></div>
-
     <div class="header">
         <div class="logo">Stream<span>Engine</span></div>
         <div class="header-right">
             <div id="digital-clock" class="clock">00:00:00</div>
-            <div id="date-display" class="date">Senin, 1 Januari</div>
+            <div id="date-display" class="date">...</div>
             <div id="system-stats" class="stats-box">CPU: -% | RAM: -</div>
         </div>
     </div>
 
     <div class="section-title">
         <span>📡 Active Streams</span>
-        <button class="btn btn-primary" onclick="openModal('modal-stream')">
-            <span>+ New Schedule</span>
-        </button>
+        <button class="btn btn-primary" onclick="openModal('modal-stream')"><span>+ New Stream</span></button>
     </div>
     
-    <div id="stream-container" class="grid-container">
-        </div>
+    <div id="stream-container" class="grid-container"></div>
 
     <div class="section-title" style="margin-top: 40px;">
         <span>🎬 Video Library</span>
@@ -127,17 +88,8 @@
 
     <div class="table-container">
         <table>
-            <thead>
-                <tr>
-                    <th width="120">Preview</th>
-                    <th>Video Details</th>
-                    <th>Status</th>
-                    <th style="text-align:right">Actions</th>
-                </tr>
-            </thead>
-            <tbody id="video-table-body">
-                <tr><td colspan="4" style="text-align:center; color:#64748b; padding:30px;">Loading videos...</td></tr>
-            </tbody>
+            <thead><tr><th width="120">Preview</th><th>Video Details</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>
+            <tbody id="video-table-body"><tr><td colspan="4" style="text-align:center; color:#64748b; padding:30px;">Loading...</td></tr></tbody>
         </table>
     </div>
 
@@ -145,376 +97,126 @@
         <div class="modal-content">
             <h3 style="margin-bottom:20px; font-weight:800; font-size:1.3rem;">Setup Stream</h3>
             <input type="hidden" id="edit-stream-id">
-
+            <div class="form-group"><label class="form-label">Judul Stream</label><input type="text" id="stream-title" class="form-control" placeholder="Nama Channel"></div>
+            <div class="form-group"><label class="form-label">Stream Key</label><input type="password" id="stream-key" class="form-control" placeholder="xxxx-xxxx"></div>
+            <div class="form-group"><label class="form-label">Pilih Video</label><select id="stream-video" class="form-control"></select></div>
+            
             <div class="form-group">
-                <label class="form-label">Judul Stream</label>
-                <input type="text" id="stream-title" class="form-control" placeholder="Nama Channel / Judul Live">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Stream Key</label>
-                <input type="password" id="stream-key" class="form-control" placeholder="xxxx-xxxx-xxxx-xxxx">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Pilih Video</label>
-                <select id="stream-video" class="form-control"></select>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Tipe Jadwal</label>
+                <label class="form-label">Mode Jadwal</label>
                 <select id="schedule-type" class="form-control" onchange="toggleScheduleType()">
-                    <option value="daily">🔁 Harian (Looping Setiap Hari)</option>
+                    <option value="manual">🎛 Manual (Start/Stop Sendiri)</option>
+                    <option value="daily">🔁 Harian (Looping Tiap Hari)</option>
                     <option value="once">📅 Sekali Jalan (One Time)</option>
                 </select>
             </div>
 
-            <div id="input-daily" class="form-group">
-                <label class="form-label">Jam Mulai (Harian)</label>
-                <input type="time" id="daily-start" class="form-control">
+            <div id="time-settings" style="display:none; border-top:1px dashed var(--border); padding-top:15px; margin-top:15px;">
+                <div id="input-daily" class="form-group"><label class="form-label">Jam Mulai (Harian)</label><input type="time" id="daily-start" class="form-control"></div>
+                <div id="input-once" class="form-group" style="display:none"><label class="form-label">Waktu Mulai</label><input type="datetime-local" id="once-start" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Durasi Live</label><div class="row-2"><input type="number" id="dur-h" class="form-control" placeholder="Jam" value="1"><input type="number" id="dur-m" class="form-control" placeholder="Menit" value="0"></div></div>
             </div>
 
-            <div id="input-once" class="form-group" style="display:none">
-                <label class="form-label">Waktu Mulai</label>
-                <input type="datetime-local" id="once-start" class="form-control">
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Durasi Live</label>
-                <div class="row-2">
-                    <input type="number" id="dur-h" class="form-control" placeholder="Jam" value="1">
-                    <input type="number" id="dur-m" class="form-control" placeholder="Menit" value="0">
-                </div>
-            </div>
-
-            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:30px;">
-                <button class="btn btn-secondary" onclick="closeModal('modal-stream')">Cancel</button>
-                <button class="btn btn-primary" onclick="saveStream()">Save Schedule</button>
-            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:30px;"><button class="btn btn-secondary" onclick="closeModal('modal-stream')">Cancel</button><button class="btn btn-primary" onclick="saveStream()">Save Schedule</button></div>
         </div>
     </div>
 
-    <div id="modal-upload" class="modal">
-        <div class="modal-content">
-            <h3>Upload Video</h3>
-            <p style="color:var(--text-secondary); margin-bottom:20px;">Upload file MP4 dari komputer Anda.</p>
-            <div class="form-group">
-                <input type="file" id="file-upload" class="form-control" accept=".mp4,.mkv,.mov">
-            </div>
-            <button class="btn btn-primary" style="width:100%" onclick="uploadVideo()">Start Upload 🚀</button>
-        </div>
-    </div>
-
-    <div id="modal-import" class="modal">
-        <div class="modal-content">
-            <h3>Import Google Drive</h3>
-            <p style="color:var(--text-secondary); margin-bottom:20px;">Pastikan link aksesnya "Anyone with the link".</p>
-            <div class="form-group">
-                <input type="text" id="gdrive-url" class="form-control" placeholder="https://drive.google.com/file/d/...">
-            </div>
-            <button class="btn btn-primary" style="width:100%" onclick="importVideo()">Download to VPS ☁</button>
-        </div>
-    </div>
+    <div id="modal-upload" class="modal"><div class="modal-content"><h3>Upload Video</h3><div class="form-group"><input type="file" id="file-upload" class="form-control" accept=".mp4,.mkv,.mov"></div><button class="btn btn-primary" style="width:100%" onclick="uploadVideo()">Start Upload 🚀</button></div></div>
+    <div id="modal-import" class="modal"><div class="modal-content"><h3>Import GDrive</h3><div class="form-group"><input type="text" id="gdrive-url" class="form-control" placeholder="https://drive..."></div><button class="btn btn-primary" style="width:100%" onclick="importVideo()">Download ☁</button></div></div>
 
     <script>
-        // --- CLOCK ENGINE ---
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('id-ID', { hour12: false });
-            const dateString = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-            
-            document.getElementById('digital-clock').innerText = timeString;
-            document.getElementById('date-display').innerText = dateString;
-        }
-        setInterval(updateClock, 1000);
-        updateClock();
+        function updateClock() { const now = new Date(); document.getElementById('digital-clock').innerText = now.toLocaleTimeString('id-ID', { hour12: false }); document.getElementById('date-display').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
+        setInterval(updateClock, 1000); updateClock();
 
-        // --- UTILS ---
-        function showToast(msg, type = 'success') {
-            const div = document.createElement('div');
-            div.className = `toast ${type}`;
-            div.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <div>${msg}</div>`;
-            document.getElementById('toast-container').appendChild(div);
-            setTimeout(() => {
-                div.style.opacity = '0';
-                setTimeout(() => div.remove(), 300);
-            }, 4000);
-        }
+        function showToast(msg, type = 'success') { const div = document.createElement('div'); div.className = `toast ${type}`; div.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <div>${msg}</div>`; document.getElementById('toast-container').appendChild(div); setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 300); }, 4000); }
 
-        // --- FETCH DATA ---
-        async function fetchStats() {
-            try {
-                const res = await fetch('/api/system/stats');
-                const data = await res.json();
-                
-                // FIX RAM UNDEFINED: Cek berbagai kemungkinan nama property
-                // Beberapa versi stats mengirim 'ram' atau 'ramUsage'
-                const ram = data.ramUsage || data.ram || '0/0 GB';
-                
-                document.getElementById('system-stats').innerHTML = 
-                    `CPU: ${data.cpu}% &nbsp;|&nbsp; RAM: ${ram}`;
-            } catch(e) {
-                document.getElementById('system-stats').innerHTML = "Offline";
-            }
-        }
+        async function fetchStats() { try { const res = await fetch('/api/system/stats'); const data = await res.json(); const ram = data.ramUsage || data.ram || '0/0 GB'; document.getElementById('system-stats').innerHTML = `CPU: ${data.cpu}% &nbsp;|&nbsp; RAM: ${ram}`; } catch(e) {} }
 
         let currentStreams = [];
-
-        async function fetchStreams() {
-            try {
-                const res = await fetch('/api/streams');
-                const streams = await res.json();
-                currentStreams = streams;
-                renderStreams(streams);
-            } catch(e) {}
-        }
+        async function fetchStreams() { try { const res = await fetch('/api/streams'); currentStreams = await res.json(); renderStreams(currentStreams); } catch(e) {} }
 
         function renderStreams(streams) {
-            const container = document.getElementById('stream-container');
-            container.innerHTML = '';
-
-            if(streams.length === 0) {
-                container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); border:2px dashed var(--border); border-radius:12px;">Belum ada jadwal. Buat baru yuk!</div>`;
-                return;
-            }
-
+            const container = document.getElementById('stream-container'); container.innerHTML = '';
+            if(streams.length === 0) { container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); border:2px dashed var(--border); border-radius:12px;">Belum ada jadwal. Buat baru yuk!</div>`; return; }
             streams.forEach(s => {
-                let badgeClass = 'status-offline';
-                let statusText = s.status;
-                if(s.status === 'live') { badgeClass = 'status-live'; statusText = '● LIVE NOW'; }
-                if(s.status === 'scheduled') { badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; }
+                let badgeClass = 'status-offline'; let statusText = s.status;
+                if(s.status === 'live') { 
+                    badgeClass = 'status-live'; 
+                    statusText = s.is_manual_run ? '● LIVE (MANUAL)' : '● LIVE NOW'; 
+                } else if(s.status === 'scheduled') { 
+                    badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; 
+                }
+                
+                if (s.schedule_type === 'manual' && s.status !== 'live') {
+                    badgeClass = 'status-manual'; statusText = '🎛 MANUAL MODE';
+                }
 
                 let timeDisplay = '';
-                if(s.schedule_type === 'daily') {
+                if(s.schedule_type === 'manual') {
+                    timeDisplay = '<span style="color:var(--text-secondary)">-- Tidak ada jadwal --</span>';
+                } else if(s.schedule_type === 'daily') {
                     timeDisplay = `<span style="color:var(--accent)">🔁 Daily:</span> ${s.daily_start_time}`;
                 } else {
                     timeDisplay = `📅 ${new Date(s.start_time).toLocaleString('id-ID')}`;
                 }
+                
+                const nextRun = s.schedule_type === 'manual' ? '-' : new Date(s.next_start_time).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
 
-                const nextRun = new Date(s.next_start_time).toLocaleString('id-ID', {
-                    weekday: 'short', hour: '2-digit', minute:'2-digit'
-                });
-
-                const html = `
+                container.innerHTML += `
                     <div class="card">
-                        <div class="card-header">
-                            <div class="stream-title" title="${s.title}">${s.title}</div>
-                            <div class="badge ${badgeClass}">${statusText}</div>
-                        </div>
-                        <div class="info-row">
-                            <span>🎬</span> <span>${s.video_title || 'Video Deleted'}</span>
-                        </div>
-                        <div class="info-row">
-                            <span>⏰</span> <span>${timeDisplay}</span>
-                        </div>
-                        <div class="info-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)">
-                            <span style="font-size:0.8rem">⏭ Next: <b>${nextRun}</b></span>
-                        </div>
+                        <div class="card-header"><div class="stream-title" title="${s.title}">${s.title}</div><div class="badge ${badgeClass}">${statusText}</div></div>
+                        <div class="info-row"><span>🎬</span> <span>${s.video_title || 'Video Deleted'}</span></div>
+                        <div class="info-row"><span>⏰</span> <span>${timeDisplay}</span></div>
+                        <div class="info-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)"><span style="font-size:0.8rem">⏭ Next: <b>${nextRun}</b></span></div>
                         <div style="display:flex; gap:10px; margin-top:20px;">
-                            ${s.status !== 'live' 
-                                ? `<button class="btn btn-sm btn-success" style="flex:1" onclick="startStream(${s.id})">▶ Start</button>
-                                   <button class="btn btn-sm btn-secondary" onclick="editStream(${s.id})">✏</button>`
-                                : `<button class="btn btn-sm btn-danger" style="flex:1" onclick="stopStream(${s.id})">⏹ STOP</button>`
-                            }
+                            ${s.status !== 'live' ? `<button class="btn btn-sm btn-success" style="flex:1" onclick="startStream(${s.id})">▶ Start</button><button class="btn btn-sm btn-secondary" onclick="editStream(${s.id})">✏</button>` : `<button class="btn btn-sm btn-danger" style="flex:1" onclick="stopStream(${s.id})">⏹ STOP</button>`}
                             <button class="btn btn-sm btn-secondary" onclick="deleteStream(${s.id})">🗑</button>
                         </div>
-                    </div>
-                `;
-                container.innerHTML += html;
+                    </div>`;
             });
         }
 
-        async function fetchVideos() {
-            try {
-                const res = await fetch('/api/videos');
-                const videos = await res.json();
-                const tbody = document.getElementById('video-table-body');
-                const select = document.getElementById('stream-video');
-                
-                tbody.innerHTML = '';
-                select.innerHTML = '';
-
-                videos.forEach(v => {
-                    const opt = document.createElement('option');
-                    opt.value = v.id;
-                    opt.innerText = v.title;
-                    select.appendChild(opt);
-
-                    const sizeMB = (v.file_size / 1024 / 1024).toFixed(1);
-                    const thumb = v.thumbnail_path ? v.thumbnail_path : '';
-                    
-                    const row = `
-                        <tr>
-                            <td>
-                                <div class="thumb-box">
-                                    <img src="${thumb}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'">
-                                </div>
-                            </td>
-                            <td>
-                                <div style="font-weight:600; font-size:0.95rem">${v.title}</div>
-                                <div class="video-meta">${v.source_type} • ${sizeMB} MB</div>
-                            </td>
-                            <td>
-                                <span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">
-                                    ${v.file_size > 0 ? 'Ready' : 'Corrupt'}
-                                </span>
-                            </td>
-                            <td style="text-align:right">
-                                <button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')">✏ Rename</button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button>
-                            </td>
-                        </tr>
-                    `;
-                    tbody.innerHTML += row;
-                });
-            } catch(e) {}
-        }
-
-        // --- ACTIONS ---
-
-        async function renameVideo(id, oldTitle) {
-            const newTitle = prompt("Masukkan Judul Baru:", oldTitle);
-            if (newTitle && newTitle !== oldTitle) {
-                const res = await fetch(`/api/videos/${id}`, {
-                    method: 'PUT',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({title: newTitle})
-                });
-                const json = await res.json();
-                if(json.success) {
-                    showToast('Video berhasil di-rename');
-                    fetchVideos();
-                } else {
-                    showToast('Gagal rename', 'error');
-                }
-            }
-        }
-
-        async function saveStream() {
-            const id = document.getElementById('edit-stream-id').value;
-            const method = id ? 'PUT' : 'POST';
-            const url = id ? `/api/streams/${id}` : '/api/streams';
-
-            const data = {
-                title: document.getElementById('stream-title').value,
-                stream_key: document.getElementById('stream-key').value,
-                video_id: document.getElementById('stream-video').value,
-                schedule_type: document.getElementById('schedule-type').value,
-                daily_start_time: document.getElementById('daily-start').value,
-                start_time: document.getElementById('once-start').value,
-                duration_hours: document.getElementById('dur-h').value,
-                duration_minutes: document.getElementById('dur-m').value
-            };
-
-            const res = await fetch(url, {
-                method: method,
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(data)
-            });
-            const json = await res.json();
-
-            if(json.success) {
-                showToast('Jadwal berhasil disimpan!');
-                closeModal('modal-stream');
-                fetchStreams();
-            } else {
-                showToast(json.error, 'error');
-            }
-        }
-
-        function editStream(id) {
-            const s = currentStreams.find(x => x.id === id);
-            if(!s) return;
-            document.getElementById('edit-stream-id').value = s.id;
-            document.getElementById('stream-title').value = s.title;
-            document.getElementById('stream-key').value = s.stream_key;
-            document.getElementById('stream-video').value = s.video_id;
-            document.getElementById('schedule-type').value = s.schedule_type;
-            toggleScheduleType();
-
-            if(s.schedule_type === 'daily') {
-                document.getElementById('daily-start').value = s.daily_start_time;
-            } else {
-                const d = new Date(s.start_time);
-                d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-                document.getElementById('once-start').value = d.toISOString().slice(0,16);
-            }
-            openModal('modal-stream');
-        }
+        async function fetchVideos() { try { const res = await fetch('/api/videos'); const videos = await res.json(); const tbody = document.getElementById('video-table-body'); const select = document.getElementById('stream-video'); tbody.innerHTML = ''; select.innerHTML = ''; videos.forEach(v => { const opt = document.createElement('option'); opt.value = v.id; opt.innerText = v.title; select.appendChild(opt); const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); tbody.innerHTML += `<tr><td><div class="thumb-box"><img src="${v.thumbnail_path || ''}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'"></div></td><td><div style="font-weight:600; font-size:0.95rem">${v.title}</div><div class="video-meta">${v.source_type} • ${sizeMB} MB</div></td><td><span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">${v.file_size > 0 ? 'Ready' : 'Corrupt'}</span></td><td style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')">✏ Rename</button><button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button></td></tr>`; }); } catch(e) {} }
 
         async function startStream(id) {
-            showToast('Sedang menyalakan mesin... 🚀');
-            const res = await fetch(`/api/streams/${id}/start`, {method:'POST'});
+            const s = currentStreams.find(x => x.id === id);
+            let payload = { manual: true, permanent: false };
+            
+            // JIKA MASIH PUNYA JADWAL, TANYA USER
+            if (s && s.schedule_type !== 'manual') { 
+                const msg = `⚠️ PERINGATAN UBAH MODE\n\nStream "${s.title}" memiliki Jadwal Otomatis.\n\nKlik OK untuk mengubah stream ini menjadi:\n👉 MODE MANUAL (PERMANEN)\n\nJadwal lama akan dihapus. Yakin?`;
+                if (!confirm(msg)) return;
+                payload.permanent = true;
+            }
+
+            showToast('Menyalakan mesin... 🚀');
+            const res = await fetch(`/api/streams/${id}/start`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
             const json = await res.json();
-            if(!json.success) showToast(json.error, 'error');
-            else { showToast('Stream ON!'); fetchStreams(); }
+            if(!json.success) showToast(json.error, 'error'); else { showToast('Stream ON!'); fetchStreams(); }
         }
 
-        async function stopStream(id) {
-            if(!confirm('Matikan Stream ini?')) return;
-            await fetch(`/api/streams/${id}/stop`, {method:'POST'});
-            fetchStreams();
-        }
+        async function saveStream() { const id = document.getElementById('edit-stream-id').value; const method = id ? 'PUT' : 'POST'; const url = id ? `/api/streams/${id}` : '/api/streams'; const data = { title: document.getElementById('stream-title').value, stream_key: document.getElementById('stream-key').value, video_id: document.getElementById('stream-video').value, schedule_type: document.getElementById('schedule-type').value, daily_start_time: document.getElementById('daily-start').value, start_time: document.getElementById('once-start').value, duration_hours: document.getElementById('dur-h').value, duration_minutes: document.getElementById('dur-m').value }; const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }); const json = await res.json(); if(json.success) { showToast('Jadwal disimpan!'); closeModal('modal-stream'); fetchStreams(); } else { showToast(json.error, 'error'); } }
 
-        async function deleteStream(id) {
-            if(!confirm('Hapus jadwal ini permanen?')) return;
-            await fetch(`/api/streams/${id}`, {method:'DELETE'});
-            fetchStreams();
-        }
-
-        async function uploadVideo() {
-            const file = document.getElementById('file-upload').files[0];
-            if(!file) return showToast('Pilih file dulu', 'error');
-            const formData = new FormData();
-            formData.append('video', file);
-            showToast('Mengupload... Jangan tutup tab ini!', 'warning');
-            const res = await fetch('/api/videos/upload', {method:'POST', body:formData});
-            const json = await res.json();
-            if(json.success) {
-                showToast('Upload Selesai!');
-                closeModal('modal-upload');
-                fetchVideos();
-            } else { showToast(json.error, 'error'); }
-        }
+        function editStream(id) { const s = currentStreams.find(x => x.id === id); if(!s) return; document.getElementById('edit-stream-id').value = s.id; document.getElementById('stream-title').value = s.title; document.getElementById('stream-key').value = s.stream_key; document.getElementById('stream-video').value = s.video_id; document.getElementById('schedule-type').value = s.schedule_type; toggleScheduleType(); if(s.schedule_type === 'daily') { document.getElementById('daily-start').value = s.daily_start_time; } else if(s.schedule_type === 'once') { const d = new Date(s.start_time); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); document.getElementById('once-start').value = d.toISOString().slice(0,16); } openModal('modal-stream'); }
+        async function stopStream(id) { if(!confirm('Matikan Stream ini?')) return; await fetch(`/api/streams/${id}/stop`, {method:'POST'}); fetchStreams(); }
+        async function deleteStream(id) { if(!confirm('Hapus jadwal ini?')) return; await fetch(`/api/streams/${id}`, {method:'DELETE'}); fetchStreams(); }
+        async function renameVideo(id, old) { const n = prompt("Judul Baru:", old); if(n && n!==old) { await fetch(`/api/videos/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:n})}); fetchVideos(); }}
+        async function deleteVideo(id) { if(!confirm('Hapus file video?')) return; await fetch(`/api/videos/${id}`, {method:'DELETE'}); fetchVideos(); }
+        async function uploadVideo() { const f = document.getElementById('file-upload').files[0]; if(!f) return showToast('Pilih file', 'error'); const d = new FormData(); d.append('video', f); showToast('Upload berjalan...', 'warning'); const r = await fetch('/api/videos/upload', {method:'POST', body:d}); const j = await r.json(); if(j.success){ showToast('Sukses!'); closeModal('modal-upload'); fetchVideos(); } else showToast(j.error, 'error'); }
         
-        async function deleteVideo(id) {
-            if(!confirm('Hapus file video ini dari server?')) return;
-            await fetch(`/api/videos/${id}`, {method:'DELETE'});
-            fetchVideos();
-        }
-
-        function toggleScheduleType() {
-            const type = document.getElementById('schedule-type').value;
-            document.getElementById('input-daily').style.display = type === 'daily' ? 'block' : 'none';
-            document.getElementById('input-once').style.display = type === 'once' ? 'block' : 'none';
-        }
-
-        function openModal(id) { 
-            const el = document.getElementById(id);
-            el.style.display = 'flex';
-            setTimeout(() => el.classList.add('show'), 10);
-            if(id === 'modal-stream' && !document.getElementById('edit-stream-id').value) {
-                // Clear inputs
+        function toggleScheduleType() { 
+            const t = document.getElementById('schedule-type').value; 
+            const timeArea = document.getElementById('time-settings');
+            if (t === 'manual') { timeArea.style.display = 'none'; } 
+            else { 
+                timeArea.style.display = 'block'; 
+                document.getElementById('input-daily').style.display = t === 'daily'?'block':'none'; 
+                document.getElementById('input-once').style.display = t === 'once'?'block':'none'; 
             }
         }
+        function openModal(id) { const el = document.getElementById(id); el.style.display = 'flex'; setTimeout(() => el.classList.add('show'), 10); if(id === 'modal-stream' && !document.getElementById('edit-stream-id').value) { toggleScheduleType(); } }
+        function closeModal(id) { const el = document.getElementById(id); el.classList.remove('show'); setTimeout(() => { el.style.display = 'none'; if(id==='modal-stream'){ document.getElementById('edit-stream-id').value=''; document.getElementById('stream-title').value=''; document.getElementById('stream-key').value=''; } }, 300); }
 
-        function closeModal(id) { 
-            const el = document.getElementById(id);
-            el.classList.remove('show');
-            setTimeout(() => {
-                el.style.display = 'none';
-                if(id === 'modal-stream') {
-                    document.getElementById('edit-stream-id').value = '';
-                    document.getElementById('stream-title').value = '';
-                    document.getElementById('stream-key').value = '';
-                }
-            }, 300);
-        }
-
-        // Init
-        setInterval(() => { fetchStats(); fetchStreams(); }, 3000);
-        fetchStats(); fetchStreams(); fetchVideos();
-
+        setInterval(() => { fetchStats(); fetchStreams(); }, 3000); fetchStats(); fetchStreams(); fetchVideos();
     </script>
 </body>
 </html>
