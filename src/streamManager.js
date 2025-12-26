@@ -1,100 +1,87 @@
-const { spawn } = require('child_process');
+const { spawn, exec } = require('child_process');
 const db = require('./db');
 
-// Menyimpan proses FFmpeg yang sedang jalan: Map<ID, Process>
+// Map Process
 const activeStreams = new Map();
 
-// Cek Status
 const isRunning = (streamId) => {
     return activeStreams.has(streamId);
 };
 
 const startStreamProcess = (stream, videoPath) => {
     if (activeStreams.has(stream.id)) {
-        console.log(`[STREAM WARNING] ID ${stream.id} sudah berjalan.`);
+        console.log(`[STREAM WARNING] ID ${stream.id} sudah jalan.`);
         return;
     }
 
     console.log(`[STREAM START] ${stream.title} (ID: ${stream.id})`);
 
     const args = [
-        // --- FITUR LOOPING (Video Pendek -> Stream Panjang) ---
-        '-stream_loop', '-1',   // Artinya: Ulangi terus (Infinite) sampai distop Scheduler
-        
-        '-re',                  // Realtime reading
-        '-i', videoPath,        // Input File
-        
-        // VIDEO: COPY MENTAH-MENTAH (Ringan CPU)
-        '-c:v', 'copy',      
-        
-        // AUDIO: RE-ENCODE KE AAC (Safety)
-        '-c:a', 'aac',          
-        '-b:a', '128k',         
-        '-ar', '44100',         
-        
-        '-f', 'flv',            // Format streaming
+        '-stream_loop', '-1',
+        '-re',
+        '-i', videoPath,
+        '-c:v', 'copy',
+        '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
+        '-f', 'flv',
         `${stream.rtmp_url}/${stream.stream_key}`
     ];
 
     const ffmpeg = spawn('ffmpeg', args);
     activeStreams.set(stream.id, ffmpeg);
 
-    ffmpeg.stderr.on('data', (data) => {
-        // console.log(`[FFMPEG] ${data}`);
-    });
-
-    ffmpeg.on('error', (err) => {
-        console.error(`[STREAM ERROR] Gagal spawn FFmpeg: ${err.message}`);
-        killStream(stream.id);
-    });
+    ffmpeg.stderr.on('data', () => {}); // Silent log
 
     ffmpeg.on('close', (code) => {
-        console.log(`[STREAM STOP] ID ${stream.id} finished (Code: ${code})`);
-        
-        // Hapus dari memory
+        console.log(`[STREAM END] ID ${stream.id} finished.`);
         if (activeStreams.has(stream.id)) {
             activeStreams.delete(stream.id);
-            // Default behavior: Jika mati sendiri/error, set Offline
-            setTimeout(() => updateStatus(stream.id, 'offline'), 1000);
+            // Default: Jika mati sendiri, set offline
+            updateStatus(stream.id, 'offline');
         }
     });
 };
 
-// MODIFIKASI: Tambah parameter 'keepStatus'
+// --- FUNGSI STOP YANG DIPERBAIKI (Search & Destroy) ---
 const stopStreamProcess = (streamId, keepStatus = false) => {
-    killStream(streamId, keepStatus);
-};
-
-const killStream = (streamId, keepStatus = false) => {
+    
+    // 1. Coba matikan lewat Memory (Cara Normal)
     const ffmpeg = activeStreams.get(streamId);
     if (ffmpeg) {
-        console.log(`[STREAM KILL] Mematikan paksa ID ${streamId} (KeepStatus: ${keepStatus})`);
-        
-        // PENTING: Hapus listener 'close' agar tidak memicu updateStatus 'offline' otomatis
+        console.log(`[STOP] Mematikan ID ${streamId} dari Memory...`);
         ffmpeg.removeAllListeners('close');
-        
-        try {
-            ffmpeg.stdin.pause();
-            ffmpeg.kill('SIGKILL');
-        } catch(e) {}
-        
+        try { ffmpeg.kill('SIGKILL'); } catch(e) {}
         activeStreams.delete(streamId);
-
-        // Hanya update jadi offline jika TIDAK disuruh keepStatus
-        if (!keepStatus) {
-            updateStatus(streamId, 'offline');
-        }
     }
-}
+
+    // 2. FAILSAFE: Matikan lewat System Command (Cara Paksa)
+    // Berguna jika Server habis restart (Lupa Memory)
+    db.get("SELECT stream_key FROM streams WHERE id = ?", [streamId], (err, row) => {
+        if (row && row.stream_key) {
+            console.log(`[FORCE KILL] Mencari proses dengan Key: ...${row.stream_key.slice(-4)}`);
+            
+            // Perintah Linux: pkill -f "kunci_stream"
+            // Ini akan membunuh proses APAPUN yang mengandung stream key tersebut
+            exec(`pkill -f "${row.stream_key}"`, (err) => {
+                if(!err) console.log("[FORCE KILL] Sukses membunuh Ghost Process.");
+            });
+        }
+    });
+
+    // 3. Pastikan Status Database Berubah (PENTING!)
+    // Jangan pedulikan prosesnya ketemu atau tidak, DB harus update.
+    if (!keepStatus) {
+        updateStatus(streamId, 'offline');
+    }
+};
 
 function updateStatus(id, status) {
-    db.run("UPDATE streams SET status = ? WHERE id = ?", [status, id], (err) => {
-        if(err) console.error(`[DB ERROR] Status update failed:`, err.message);
-    });
+    db.run("UPDATE streams SET status = ? WHERE id = ?", [status, id]);
 }
 
+// Bersih-bersih saat server mati
 process.on('exit', () => {
-    for (const [id, ffmpeg] of activeStreams) ffmpeg.kill('SIGKILL');
+    exec('killall -9 ffmpeg');
 });
 
 module.exports = { startStreamProcess, stopStreamProcess, isRunning };
+

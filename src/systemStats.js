@@ -1,35 +1,56 @@
-const si = require('systeminformation');
+const os = require('os');
 
+// Fungsi pembantu untuk menghitung % CPU
+// Mengambil snapshot penggunaan CPU sekarang vs 100ms lagi
+function getCpuUsage() {
+    return new Promise((resolve) => {
+        const start = os.cpus().map(cpu => cpu.times);
+        
+        setTimeout(() => {
+            const end = os.cpus().map(cpu => cpu.times);
+            
+            let idle = 0;
+            let total = 0;
+
+            for (let i = 0; i < start.length; i++) {
+                const startTimes = start[i];
+                const endTimes = end[i];
+
+                // Hitung selisih waktu
+                const idleDiff = endTimes.idle - startTimes.idle;
+                const totalDiff = (endTimes.user + endTimes.nice + endTimes.sys + endTimes.idle + endTimes.irq) - 
+                                  (startTimes.user + startTimes.nice + startTimes.sys + startTimes.idle + startTimes.irq);
+
+                idle += idleDiff;
+                total += totalDiff;
+            }
+
+            const usage = total === 0 ? 0 : ((1 - idle / total) * 100);
+            resolve(usage.toFixed(1)); // Return 1 angka belakang koma (misal: 12.5)
+        }, 100); // Sampling selama 100ms
+    });
+}
+
+// Fungsi Utama yang dipanggil Server
 const getSystemStats = async () => {
-    try {
-        const [cpu, mem, fsSize, network] = await Promise.all([
-            si.currentLoad(),
-            si.mem(),
-            si.fsSize(),
-            si.networkStats()
-        ]);
+    // 1. Hitung RAM
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
 
-        // Ambil disk root "/", fallback ke disk pertama jika tidak ketemu
-        const rootDisk = fsSize.find(d => d.mount === '/') || fsSize[0] || { use: 0 };
+    // Konversi Byte ke GB (Byte / 1024 / 1024 / 1024)
+    const totalGB = (totalMem / (1024 ** 3)).toFixed(2); // 2 angka belakang koma
+    const usedGB = (usedMem / (1024 ** 3)).toFixed(2);
 
-        // Ambil network interface pertama
-        const net = network[0] || { tx_sec: 0, rx_sec: 0 };
+    // 2. Hitung CPU
+    const cpuUsage = await getCpuUsage();
 
-        return {
-            cpu: Math.round(cpu.currentLoad),
-            ram_used: (mem.active / 1024 / 1024 / 1024).toFixed(2),
-            ram_total: (mem.total / 1024 / 1024 / 1024).toFixed(2),
-            disk_percent: Math.round(rootDisk.use),
-            net_tx: (net.tx_sec / 1024).toFixed(1), // KB/s
-            net_rx: (net.rx_sec / 1024).toFixed(1)  // KB/s
-        };
-    } catch (e) {
-        console.error("Stats Error:", e);
-        // Kembalikan data kosong agar server tidak crash
-        return {
-            cpu: 0, ram_used: 0, ram_total: 0, disk_percent: 0, net_tx: 0, net_rx: 0
-        };
-    }
+    // 3. Return Data
+    return {
+        cpu: cpuUsage,
+        ramUsage: `${usedGB}/${totalGB} GB`, // Format string: "0.55/2.00 GB"
+        disk: 'N/A' // Disk check butuh library tambahan, kita skip biar ringan
+    };
 };
 
 module.exports = { getSystemStats };
