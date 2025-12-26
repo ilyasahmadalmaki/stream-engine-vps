@@ -175,7 +175,30 @@
 
         function showToast(msg, type = 'success') { const div = document.createElement('div'); div.className = `toast ${type}`; div.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <div>${msg}</div>`; document.getElementById('toast-container').appendChild(div); setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 300); }, 4000); }
 
-        async function fetchStats() { try { const res = await fetch('/api/system/stats'); const data = await res.json(); const ram = data.ramUsage || data.ram || '0/0 GB'; document.getElementById('system-stats').innerHTML = `CPU: ${data.cpu}% &nbsp;|&nbsp; RAM: ${ram}`; } catch(e) {} }
+        async function fetchStats() { 
+            try { 
+                const res = await fetch('/api/system/stats'); 
+                const data = await res.json(); 
+                
+                // Parse RAM
+                const ram = data.ram || '0/0 GB';
+                
+                // Parse Disk
+                const disk = data.disk || { used: '0', total: '0', percent: '0%' };
+                const diskPercent = parseInt(disk.percent.replace('%',''));
+                
+                // Warna Indikator Disk (Merah jika penuh > 90%)
+                let diskColor = 'var(--accent)';
+                if(diskPercent > 90) diskColor = 'var(--danger)';
+                else if(diskPercent > 70) diskColor = 'var(--warning)';
+
+                document.getElementById('system-stats').innerHTML = `
+                    CPU: ${data.cpu}% &nbsp;|&nbsp; 
+                    RAM: ${ram} &nbsp;|&nbsp; 
+                    <span style="color:${diskColor}">💾 ${disk.percent} (${disk.used}/${disk.total})</span>
+                `; 
+            } catch(e) {} 
+        }
 
         let currentStreams = [];
         async function fetchStreams() { try { const res = await fetch('/api/streams'); currentStreams = await res.json(); renderStreams(currentStreams); } catch(e) {} }
