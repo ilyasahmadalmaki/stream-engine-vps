@@ -1,101 +1,170 @@
 const TelegramBot = require('node-telegram-bot-api');
 const db = require('./db');
 const { getSystemStats } = require('./systemStats');
-// Kita import streamManager nanti di dalam fungsi biar tidak circular dependency error
 
 let bot = null;
-let adminChatId = process.env.TELEGRAM_CHAT_ID; // ID Telegram Anda
+let adminChatId = process.env.TELEGRAM_CHAT_ID;
+let streamManagerRef = null;
 
-const init = (token, streamManagerRef) => {
-    if (!token) return console.log('[TELEGRAM] Token tidak ditemukan, bot nonaktif.');
+const init = (token, manager) => {
+    if (!token) return console.log('[TELEGRAM] Token kosong.');
     
+    streamManagerRef = manager;
     bot = new TelegramBot(token, { polling: true });
-    console.log('[TELEGRAM] Bot Started & Polling...');
+    console.log('[TELEGRAM] Bot Modern UI Started...');
 
-    // --- COMMAND: /start (Cek ID) ---
+    // --- SETUP MENU PERMANEN (TOMBOL DI BAWAH KOLOM KETIK) ---
+    bot.setMyCommands([
+        { command: '/dashboard', description: '🎛 Buka Panel Kontrol' },
+        { command: '/status', description: '📊 Cek Resource Server' }
+    ]);
+
+    // --- COMMAND: /start ---
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         if (!adminChatId) {
             adminChatId = chatId;
-            bot.sendMessage(chatId, `✅ Konfigurasi Berhasil!\nChat ID Anda: ${chatId}\nSilakan simpan di .env: TELEGRAM_CHAT_ID=${chatId}`);
-            console.log(`[TELEGRAM] Admin Chat ID set to: ${chatId}`);
+            bot.sendMessage(chatId, `✅ **Admin Terdaftar!**\nID: \`${chatId}\`\nSimpan ke .env ya!`);
         } else if (chatId.toString() !== adminChatId.toString()) {
-            bot.sendMessage(chatId, "⛔ Akses Ditolak. Anda bukan admin.");
+            bot.sendMessage(chatId, "⛔ Akses Ditolak.");
         } else {
-            bot.sendMessage(chatId, "👋 Halo Bos! StreamEngine siap diperintah.\n\nMenu:\n/status - Cek CPU/RAM & Live\n/list - Daftar Stream\n/live [id] - Start Stream\n/kill [id] - Stop Stream");
+            bot.sendMessage(chatId, "👋 **Selamat Datang di StreamEngine PRO**\nTekan /dashboard untuk mulai mengontrol.", {
+                reply_markup: {
+                    keyboard: [[{ text: "/dashboard" }, { text: "/status" }]],
+                    resize_keyboard: true,
+                    one_time_keyboard: false
+                }
+            });
         }
     });
 
-    // --- COMMAND: /status ---
+    // --- COMMAND: /status (Dengan Tombol Refresh) ---
     bot.onText(/\/status/, async (msg) => {
-        if (msg.chat.id.toString() !== adminChatId?.toString()) return;
-        
-        const stats = await getSystemStats();
-        let message = `🖥 **SYSTEM STATUS**\n`;
-        message += `CPU: ${stats.cpu}%\nRAM: ${stats.ram}\nDisk: ${stats.disk.percent}\n\n`;
-        
-        db.all("SELECT title, status FROM streams", [], (err, rows) => {
-            if (rows) {
-                message += `📡 **STREAMS:**\n`;
-                rows.forEach(r => {
-                    const icon = r.status === 'live' ? '🟢' : '⚫';
-                    message += `${icon} ${r.title} (${r.status})\n`;
-                });
-            }
-            bot.sendMessage(adminChatId, message);
-        });
+        if (!isAdmin(msg)) return;
+        sendSystemStatus(msg.chat.id);
     });
 
-    // --- COMMAND: /list ---
-    bot.onText(/\/list/, (msg) => {
-        if (msg.chat.id.toString() !== adminChatId?.toString()) return;
-        
-        db.all("SELECT id, title, status, schedule_type FROM streams", [], (err, rows) => {
-            if (!rows || rows.length === 0) return bot.sendMessage(adminChatId, "Belum ada jadwal stream.");
+    // --- COMMAND: /dashboard (Menu Utama Stream) ---
+    bot.onText(/\/dashboard/, (msg) => {
+        if (!isAdmin(msg)) return;
+        sendDashboard(msg.chat.id);
+    });
+
+    // --- HANDLER KLIK TOMBOL (CALLBACK QUERY) ---
+    bot.on('callback_query', async (query) => {
+        if (query.from.id.toString() !== adminChatId?.toString()) return;
+
+        const data = query.data;
+        const chatId = query.message.chat.id;
+        const messageId = query.message.message_id;
+
+        // 1. REFRESH STATUS
+        if (data === 'REFRESH_STATUS') {
+            const stats = await getSystemStats();
+            const text = `🖥 **SYSTEM STATUS**\nLast Update: ${new Date().toLocaleTimeString()}\n\nCPU: ${stats.cpu}%\nRAM: ${stats.ram}\nDisk: ${stats.disk.percent} (${stats.disk.used}/${stats.disk.total})`;
             
-            let msg = "📋 **DAFTAR JADWAL:**\n\n";
-            rows.forEach(r => {
-                msg += `ID: ${r.id} | ${r.title}\nMode: ${r.schedule_type} | Status: ${r.status}\n------------------\n`;
+            // Edit pesan lama (biar ga nyepam)
+            bot.editMessageText(text, {
+                chat_id: chatId,
+                message_id: messageId,
+                reply_markup: {
+                    inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'REFRESH_STATUS' }]]
+                }
+            }).catch(() => {}); // Catch error kalau isi sama persis
+            
+            bot.answerCallbackQuery(query.id, { text: 'Data diperbarui!' });
+        }
+
+        // 2. REFRESH DASHBOARD
+        else if (data === 'REFRESH_DASHBOARD') {
+            bot.deleteMessage(chatId, messageId).catch(()=>{}); // Hapus menu lama
+            sendDashboard(chatId); // Kirim menu baru
+            bot.answerCallbackQuery(query.id);
+        }
+
+        // 3. START STREAM
+        else if (data.startsWith('START_')) {
+            const id = data.split('_')[1];
+            db.get("SELECT s.*, v.file_path FROM streams s LEFT JOIN videos v ON s.video_id = v.id WHERE s.id = ?", [id], (err, stream) => {
+                if (stream) {
+                    streamManagerRef.startStreamProcess(stream, stream.file_path);
+                    db.run("UPDATE streams SET status='live', is_manual_run=1 WHERE id=?", [id], () => {
+                        bot.answerCallbackQuery(query.id, { text: `🚀 ${stream.title} dinyalakan!` });
+                        // Update tampilan tombol jadi STOP
+                        setTimeout(() => sendDashboard(chatId), 1000); // Delay dikit biar DB update
+                    });
+                }
             });
-            msg += "\nGunakan: `/live ID` atau `/kill ID`";
-            bot.sendMessage(adminChatId, msg);
-        });
-    });
+        }
 
-    // --- COMMAND: /live [id] ---
-    bot.onText(/\/live (.+)/, (msg, match) => {
-        if (msg.chat.id.toString() !== adminChatId?.toString()) return;
-        const id = match[1];
-
-        db.get("SELECT s.*, v.file_path FROM streams s LEFT JOIN videos v ON s.video_id = v.id WHERE s.id = ?", [id], (err, stream) => {
-            if (!stream) return bot.sendMessage(adminChatId, "❌ Stream ID tidak ditemukan.");
-            
-            // Logic start manual
-            streamManagerRef.startStreamProcess(stream, stream.file_path);
-            
-            // Update DB jadi manual mode
-            db.run("UPDATE streams SET status='live', is_manual_run=1 WHERE id=?", [id]);
-            bot.sendMessage(adminChatId, `🚀 Perintah diterima. Menyalakan: ${stream.title}`);
-        });
-    });
-
-    // --- COMMAND: /kill [id] ---
-    bot.onText(/\/kill (.+)/, (msg, match) => {
-        if (msg.chat.id.toString() !== adminChatId?.toString()) return;
-        const id = match[1];
-        
-        streamManagerRef.stopStreamProcess(id, true);
-        
-        // Reset manual flag
-        db.run("UPDATE streams SET status='scheduled', is_manual_run=0 WHERE id=?", [id]);
-        bot.sendMessage(adminChatId, `🛑 Perintah diterima. Mematikan ID ${id}.`);
+        // 4. STOP STREAM
+        else if (data.startsWith('STOP_')) {
+            const id = data.split('_')[1];
+            streamManagerRef.stopStreamProcess(id, true);
+            db.run("UPDATE streams SET status='scheduled', is_manual_run=0 WHERE id=?", [id], () => {
+                bot.answerCallbackQuery(query.id, { text: `🛑 Stream dimatikan.` });
+                setTimeout(() => sendDashboard(chatId), 1000);
+            });
+        }
     });
 };
 
-// Fungsi untuk kirim notifikasi dari modul lain
+// --- HELPERS ---
+
+function isAdmin(msg) {
+    return msg.chat.id.toString() === adminChatId?.toString();
+}
+
+async function sendSystemStatus(chatId) {
+    const stats = await getSystemStats();
+    const text = `🖥 **SYSTEM STATUS**\n\nCPU: ${stats.cpu}%\nRAM: ${stats.ram}\nDisk: ${stats.disk.percent} (${stats.disk.used}/${stats.disk.total})`;
+    
+    bot.sendMessage(chatId, text, {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '🔄 Refresh Data', callback_data: 'REFRESH_STATUS' }]
+            ]
+        }
+    });
+}
+
+function sendDashboard(chatId) {
+    db.all("SELECT id, title, status, schedule_type FROM streams", [], (err, rows) => {
+        if (!rows || rows.length === 0) return bot.sendMessage(chatId, "Belum ada jadwal stream.");
+
+        let keyboard = [];
+        
+        // Loop setiap stream untuk bikin tombol
+        rows.forEach(r => {
+            const isLive = r.status === 'live';
+            const statusIcon = isLive ? '🟢 LIVE' : '⚫ OFF';
+            const modeIcon = r.schedule_type === 'manual' ? '🎛 Manual' : '📅 Jadwal';
+
+            // Baris 1: Judul & Status
+            // (Kita pakai tombol dummy biar rapi)
+            keyboard.push([{ text: `${statusIcon} | ${r.title} (${modeIcon})`, callback_data: 'IGNORE' }]);
+
+            // Baris 2: Tombol Aksi
+            if (isLive) {
+                keyboard.push([{ text: '⏹ MATIKAN STREAM', callback_data: `STOP_${r.id}` }]);
+            } else {
+                keyboard.push([{ text: '▶ NYALAKAN STREAM', callback_data: `START_${r.id}` }]);
+            }
+        });
+
+        // Tombol Refresh Global
+        keyboard.push([{ text: '🔄 Refresh Dashboard', callback_data: 'REFRESH_DASHBOARD' }]);
+
+        bot.sendMessage(chatId, "🎛 **STREAM CONTROL DASHBOARD**\nKlik tombol di bawah untuk mengontrol:", {
+            reply_markup: { inline_keyboard: keyboard }
+        });
+    });
+}
+
+// Fungsi notifikasi (export)
 const notify = (message) => {
     if (bot && adminChatId) {
-        bot.sendMessage(adminChatId, message).catch(e => console.error("Gagal kirim TG:", e.message));
+        bot.sendMessage(adminChatId, message).catch(() => {});
     }
 };
 
