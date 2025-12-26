@@ -15,11 +15,11 @@ const init = (token, manager) => {
     adminChatId = process.env.TELEGRAM_CHAT_ID;
     streamManagerRef = manager;
     bot = new TelegramBot(token, { polling: true });
-    console.log('[TELEGRAM] Bot Started...');
+    console.log('[TELEGRAM] Bot Ready...');
 
-    // SET MENU SLASH (Yang muncul kalau ketik /)
+    // SETUP MENU SLASH
     bot.setMyCommands([
-        { command: '/start', description: '🏠 Reset Menu' },
+        { command: '/start', description: '🏠 Menu Utama' },
         { command: '/add', description: '➕ Tambah Stream' },
         { command: '/dashboard', description: '🎛 Dashboard' }
     ]).catch(()=>{});
@@ -28,11 +28,7 @@ const init = (token, manager) => {
     bot.onText(/\/start/, (msg) => {
         const chatId = msg.chat.id;
         if (!adminChatId) adminChatId = chatId;
-        
-        // Reset state wizard jika ada
         delete userStates[chatId];
-        
-        // TAMPILKAN MENU BAWAH YANG BARU
         showMainMenu(chatId);
     });
 
@@ -42,45 +38,37 @@ const init = (token, manager) => {
         showMainMenu(msg.chat.id);
     });
 
-    // --- HANDLER PESAN TEKS (UTAMA) ---
-    // Ini yang menangkap pencetan tombol keyboard
+    // --- HANDLER PESAN TEKS (TOMBOL MENU & WIZARD) ---
     bot.on('message', (msg) => {
         const chatId = msg.chat.id;
         const text = msg.text;
         
         if (!text || !isAdmin(msg)) return;
 
-        // --- 1. DETEKSI TOMBOL MENU UTAMA ---
-        
-        // Tombol Status
-        if (text === "📊 Cek Status" || text === "/status") {
+        // 1. DETEKSI TOMBOL MENU (Pakai .includes biar lebih aman)
+        if (text.includes("Cek Status") || text === "/status") {
             return sendSystemStatus(chatId);
         }
-        // Tombol Dashboard
-        else if (text === "🎛 Dashboard" || text === "/dashboard") {
+        else if (text.includes("Dashboard") || text === "/dashboard") {
             return sendDashboard(chatId);
         }
-        // Tombol Gallery
-        else if (text === "📂 Galeri Video" || text === "/gallery") {
+        else if (text.includes("Galeri") || text === "/gallery") {
             return sendGallery(chatId);
         }
-        // Tombol Add
-        else if (text === "➕ Tambah Stream" || text === "/add") {
+        else if (text.includes("Tambah Stream") || text === "/add") {
             userStates[chatId] = { step: 'WAITING_TITLE', temp: {} };
             return bot.sendMessage(chatId, "📝 **SETUP STREAM BARU**\n\n1️⃣ Ketik **Judul Stream**:\n(/cancel untuk batal)");
         }
 
-        // --- 2. LOGIKA WIZARD (INPUT DATA) ---
+        // 2. LOGIKA WIZARD
         const state = userStates[chatId];
-        if (!state) return; // Kalau bukan perintah tombol & bukan wizard, abaikan
+        if (!state) return;
 
-        // STEP 1: JUDUL
         if (state.step === 'WAITING_TITLE') {
             state.temp.title = text;
             state.step = 'WAITING_KEY';
             bot.sendMessage(chatId, `✅ Judul: **${text}**\n\n2️⃣ Ketik/Paste **Stream Key**:`);
         }
-        // STEP 2: KEY
         else if (state.step === 'WAITING_KEY') {
             state.temp.key = text;
             state.step = 'WAITING_VIDEO';
@@ -88,7 +76,7 @@ const init = (token, manager) => {
             db.all("SELECT id, title FROM videos ORDER BY id DESC LIMIT 10", [], (err, rows) => {
                 if (!rows || rows.length === 0) {
                     delete userStates[chatId];
-                    return bot.sendMessage(chatId, "❌ Galeri kosong. Upload video dulu via Web.");
+                    return bot.sendMessage(chatId, "❌ Galeri kosong. Upload video dulu.");
                 }
                 let keyboard = [];
                 rows.forEach(r => {
@@ -98,13 +86,12 @@ const init = (token, manager) => {
                 bot.sendMessage(chatId, "✅ Key Oke.\n\n3️⃣ **Pilih Video:**", { reply_markup: { inline_keyboard: keyboard } });
             });
         }
-        // STEP 4: WAKTU (INPUT MANUAL)
         else if (state.step === 'WAITING_TIME') {
             handleTimeInput(chatId, text, state);
         }
     });
 
-    // --- HANDLER TOMBOL CALLBACK (KLIK DI CHAT) ---
+    // --- HANDLER TOMBOL CALLBACK ---
     bot.on('callback_query', async (query) => {
         if (!isAdmin(query.message)) return;
         const data = query.data;
@@ -112,23 +99,20 @@ const init = (token, manager) => {
         const messageId = query.message.message_id;
 
         try {
-            // NAVIGASI REFRESH
+            // NAVIGASI
             if (data === 'REFRESH_DASHBOARD') { bot.deleteMessage(chatId, messageId).catch(()=>{}); sendDashboard(chatId); }
             else if (data === 'REFRESH_GALLERY') { bot.deleteMessage(chatId, messageId).catch(()=>{}); sendGallery(chatId); }
             else if (data === 'REFRESH_STATUS') { 
-                // Efek loading
-                bot.answerCallbackQuery(query.id, { text: 'Mengambil data...' });
+                bot.answerCallbackQuery(query.id, { text: 'Loading...' });
                 const stats = await getSystemStats();
                 const cpu = stats.cpu || 0;
                 const ram = stats.ram || '0/0';
                 const disk = stats.disk ? `${stats.disk.percent} (${stats.disk.used}/${stats.disk.total})` : '?';
-                
-                const t = `🖥 **SYSTEM STATUS**\nLast Update: ${new Date().toLocaleTimeString('id-ID')}\n\n🧠 CPU: ${cpu}%\n💾 RAM: ${ram}\n💿 Disk: ${disk}`;
-                
+                const t = `🖥 **SYSTEM STATUS**\nLast: ${new Date().toLocaleTimeString('id-ID')}\n\n🧠 CPU: ${cpu}%\n💾 RAM: ${ram}\n💿 Disk: ${disk}`;
                 bot.editMessageText(t, { chatId, messageId, reply_markup: { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'REFRESH_STATUS' }]] } }).catch(()=>{});
             }
             
-            // WIZARD
+            // WIZARD FLOW
             else if (data === 'CANCEL_WIZARD') {
                 delete userStates[chatId];
                 bot.deleteMessage(chatId, messageId).catch(()=>{});
@@ -185,7 +169,6 @@ const init = (token, manager) => {
                     bot.answerCallbackQuery(query.id, {text:'OFF.'}); setTimeout(()=>sendDashboard(chatId), 1000);
                 });
             }
-            // DELETE
             else if (data.startsWith('ASK_DEL_STR_')) {
                 bot.editMessageText(`Hapus Stream ID ${data.split('_')[3]}?`, {chat_id:chatId, message_id:messageId, reply_markup:{inline_keyboard:[[{text:'YA', callback_data:`EXEC_DEL_STR_${data.split('_')[3]}`},{text:'NO', callback_data:'REFRESH_DASHBOARD'}]]}});
             }
@@ -203,21 +186,17 @@ const init = (token, manager) => {
                     db.run("DELETE FROM videos WHERE id=?", [id], ()=>{ bot.answerCallbackQuery(query.id,{text:'Dihapus'}); sendGallery(chatId); });
                 });
             }
-
         } catch(e){}
     });
 };
 
-// --- LOGIC TAMBAHAN ---
-
 function handleTimeInput(chatId, text, state) {
     const type = state.temp.scheduleType;
-    let startSql=null, endSql=null, dailySql=null, nextStart=null, nextEnd=null;
-    const durationMinutes = 120; // Default 2 jam
-
+    let startSql=null, dailySql=null, nextStart=null;
+    
     try {
         if (type === 'daily') {
-            if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(text.trim())) return bot.sendMessage(chatId, "❌ Format salah. Gunakan HH:MM (Cth: 18:30)");
+            if (!/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(text.trim())) return bot.sendMessage(chatId, "❌ Format salah. Gunakan HH:MM");
             dailySql = text.trim();
             const [h, m] = dailySql.split(':');
             const d = new Date(); d.setHours(h,m,0,0);
@@ -229,33 +208,25 @@ function handleTimeInput(chatId, text, state) {
             if (d < new Date()) return bot.sendMessage(chatId, "❌ Waktu sudah lewat.");
             startSql = d.toISOString(); nextStart = startSql;
         }
-
-        saveStreamToDb(chatId, state.temp, {startSql, endSql, dailySql, nextStart, durationMinutes});
-
+        saveStreamToDb(chatId, state.temp, {startSql, dailySql, nextStart});
     } catch (e) { bot.sendMessage(chatId, "Error: "+e.message); }
 }
 
 function saveStreamToDb(chatId, temp, timeData={}) {
     const { title, key, videoId, scheduleType } = temp;
-    const { startSql, dailySql, nextStart, durationMinutes } = timeData;
+    const { startSql, dailySql, nextStart } = timeData;
+    const duration = 120;
     
-    // Hitung nextEnd sederhana
     let nextEnd = null;
-    if(nextStart) {
-        const d = new Date(nextStart);
-        d.setMinutes(d.getMinutes() + (durationMinutes || 120));
-        nextEnd = d.toISOString();
-    }
+    if(nextStart) { const d = new Date(nextStart); d.setMinutes(d.getMinutes() + duration); nextEnd = d.toISOString(); }
 
-    db.run(`INSERT INTO streams 
-        (title, rtmp_url, stream_key, video_id, schedule_type, start_time, daily_start_time, daily_duration_minutes, next_start_time, next_end_time, status, is_manual_run) 
-        VALUES (?, 'rtmp://a.rtmp.youtube.com/live2', ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', 0)`,
-        [title, key, videoId, scheduleType, startSql, dailySql, durationMinutes, nextStart, nextEnd],
+    db.run(`INSERT INTO streams (title, rtmp_url, stream_key, video_id, schedule_type, start_time, daily_start_time, daily_duration_minutes, next_start_time, next_end_time, status, is_manual_run) VALUES (?, 'rtmp://a.rtmp.youtube.com/live2', ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', 0)`,
+        [title, key, videoId, scheduleType, startSql, dailySql, duration, nextStart, nextEnd],
         (err) => {
             delete userStates[chatId];
             if (err) bot.sendMessage(chatId, `❌ DB Error: ${err.message}`);
             else {
-                bot.sendMessage(chatId, `✅ **SUKSES!**\nStream "${title}" (${scheduleType}) tersimpan.`);
+                bot.sendMessage(chatId, `✅ **SUKSES!**\nStream "${title}" tersimpan.`);
                 setTimeout(() => sendDashboard(chatId), 1000);
             }
         }
@@ -267,7 +238,6 @@ function isAdmin(msg) { return msg.chat && adminChatId && msg.chat.id.toString()
 function showMainMenu(chatId) {
     bot.sendMessage(chatId, "🎛 **MENU UTAMA**", {
         reply_markup: {
-            // LABEL TOMBOL KITA UBAH BIAR JELAS
             keyboard: [
                 [{ text: "➕ Tambah Stream" }], 
                 [{ text: "🎛 Dashboard" }, { text: "📂 Galeri Video" }],
@@ -278,16 +248,33 @@ function showMainMenu(chatId) {
     });
 }
 
-function sendSystemStatus(chatId) {
-    bot.sendChatAction(chatId, 'typing'); // Efek ngetik
-    getSystemStats().then(stats => {
-        const cpu = stats.cpu || 0;
-        const ram = stats.ram || '0/0';
-        const disk = stats.disk ? `${stats.disk.percent} (${stats.disk.used}/${stats.disk.total})` : '?';
-        const text = `🖥 **SYSTEM STATUS**\n\n🧠 CPU: ${cpu}%\n💾 RAM: ${ram}\n💿 Disk: ${disk}`;
-        bot.sendMessage(chatId, text, { reply_markup: { inline_keyboard: [[{ text: '🔄 Refresh Data', callback_data: 'REFRESH_STATUS' }]] }});
-    }).catch(e => bot.sendMessage(chatId, "Gagal baca status: "+e.message));
+function sendDashboard(chatId) {
+    // FIX: SAYA MENAMBAHKAN 'schedule_type' DI QUERY INI
+    db.all("SELECT id, title, status, schedule_type FROM streams ORDER BY status DESC", [], (e,r) => {
+        if(!r || r.length===0) return bot.sendMessage(chatId, "📭 Kosong.");
+        let k = [];
+        r.forEach(x => {
+            const live = x.status==='live';
+            k.push([{ text: `${live?'🟢':'⚫'} ${x.title} (${x.schedule_type})`, callback_data:'IGN' }]);
+            k.push([live?{text:'⏹ STOP', callback_data:`STOP_${x.id}`}:{text:'▶ START', callback_data:`START_${x.id}`}, {text:'🗑', callback_data:`ASK_DEL_STR_${x.id}`}]);
+        });
+        k.push([{text:'🔄 Refresh', callback_data:'REFRESH_DASHBOARD'}]);
+        bot.sendMessage(chatId, "🎛 **DASHBOARD**", {reply_markup:{inline_keyboard:k}});
+    });
 }
 
-const notify = (msg) => { if (bot && adminChatId) bot.sendMessage(adminChatId, msg).catch(()=>{}); };
+function sendGallery(chatId) {
+    db.all("SELECT id, title, file_size FROM videos ORDER BY id DESC LIMIT 10", [], (e,r)=>{
+        if(!r || r.length===0) return bot.sendMessage(chatId, "📭 Galeri Kosong.");
+        let k = [];
+        r.forEach(x => {
+            const sizeMB = (x.file_size / 1024 / 1024).toFixed(1);
+            k.push([{text:`🎬 ${x.title.substring(0,15)}`, callback_data:'IGN'}, {text:'🗑', callback_data:`ASK_DEL_VID_${x.id}`}]);
+        });
+        k.push([{text:'🔄 Refresh', callback_data:'REFRESH_GALLERY'}]);
+        bot.sendMessage(chatId, "📂 **GALERI VIDEO**", {reply_markup:{inline_keyboard:k}});
+    });
+}
+
+const notify = (msg) => { if(bot && adminChatId) bot.sendMessage(adminChatId, msg).catch(()=>{}); };
 module.exports = { init, notify };
