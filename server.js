@@ -10,6 +10,7 @@ const { spawn, exec } = require('child_process');
 const gdrive = require('./src/gdriveDownloader'); 
 const storage = require('./src/storage');
 const mediaUtils = require('./src/mediaUtils');
+const telegram = require('./src/telegramBot');
 
 require('dotenv').config();
 
@@ -390,8 +391,20 @@ app.delete('/api/streams/:id', (req, res) => {
 });
 
 // START SERVER
+// START SERVER
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
-    exec('killall -9 ffmpeg', (err) => { if(!err) console.log("[INIT] Cleared zombie streams."); });
+
+    // Init Telegram Bot
+    // Ganti 'TOKEN_DARI_BOTFATHER' dengan token asli, atau pakai process.env.TELEGRAM_BOT_TOKEN
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || 'TOKEN_BOT_ANDA_DISINI';
+    telegram.init(botToken, streamManager);
+
+    // Kirim notifikasi server nyala
+    setTimeout(() => {
+        telegram.notify("🖥 **SERVER ONLINE**\nStreamEngine PRO siap bekerja!");
+    }, 3000);
+
+    exec('killall -9 ffmpeg', (err) => { if(!err) console.log("[INIT] Zombie streams cleared."); });
     scheduler.runScheduler();
 });
