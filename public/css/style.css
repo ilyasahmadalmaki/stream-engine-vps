@@ -91,21 +91,31 @@ button {
 
 video { width: 150px; border-radius: 4px; background: #000; }
 
+/* MODAL FIX (Scrollable) */
 .modal {
     display: none;
     position: fixed;
     top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.8);
     z-index: 200;
+    backdrop-filter: blur(2px);
 }
+
 .modal-content {
     background: var(--card);
-    margin: 10% auto;
+    margin: 5% auto; /* Jarak lebih kecil dari atas */
     padding: 20px;
     width: 90%;
     max-width: 500px;
     border-radius: 8px;
+    border: 1px solid #333;
+    
+    /* FIX SCROLLING */
+    max-height: 85vh; /* Maksimal tinggi 85% layar */
+    overflow-y: auto; /* Munculkan scroll jika konten panjang */
+    position: relative;
 }
+
 input, select {
     width: 100%;
     padding: 10px;
@@ -114,4 +124,19 @@ input, select {
     border: 1px solid #444;
     color: white;
     box-sizing: border-box;
+    border-radius: 4px;
 }
+
+input:focus, select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.close {
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #aaa;
+}
+.close:hover { color: white; }

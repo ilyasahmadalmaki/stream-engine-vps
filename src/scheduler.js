@@ -1,83 +1,104 @@
+const cron = require('node-cron');
 const db = require('./db');
 const streamManager = require('./streamManager');
 
-// Helper: Tambah Jam ke Date
-function addHours(date, hours) {
-    return new Date(date.getTime() + (hours * 60 * 60 * 1000));
-}
-
-// Helper: Set waktu spesifik untuk "Besok"
-function getTomorrowAt(timeStr) {
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(hours, minutes, 0, 0);
-    return tomorrow;
-}
-
 const runScheduler = () => {
-    console.log('--- Scheduler Tick ---');
-    const now = new Date();
+    // Jalankan pengecekan setiap 1 menit
+    cron.schedule('* * * * *', () => {
+        console.log('--- Scheduler Tick ---');
+        const now = new Date();
 
-    db.all(`SELECT s.*, v.file_path FROM streams s LEFT JOIN videos v ON s.video_id = v.id`, [], (err, streams) => {
-        if (err) return console.error(err);
+        // Ambil stream yang statusnya BUKAN offline
+        db.all("SELECT * FROM streams WHERE status != 'offline'", [], (err, streams) => {
+            if (err) return console.error("[SCHEDULER DB ERROR]", err);
+            if (!streams) return;
 
-        streams.forEach(stream => {
-            const nextStart = new Date(stream.next_start_time);
-            const nextEnd = new Date(stream.next_end_time);
+            streams.forEach(stream => {
+                const start = new Date(stream.next_start_time);
+                const end = new Date(stream.next_end_time);
 
-            // 1. LOGIKA START
-            if (stream.status === 'scheduled' && now >= nextStart && now < nextEnd) {
-                console.log(`[SCHEDULER] Starting Stream ${stream.title}`);
-                streamManager.startStreamProcess(stream, stream.file_path);
+                // ===============================================
+                // LOGIKA 1: WAKTUNYA MULAI (START)
+                // ===============================================
+                if (now >= start && now < end) {
+                    if (stream.status !== 'live') {
+                        db.get("SELECT file_path FROM videos WHERE id = ?", [stream.video_id], (err, video) => {
+                            if (video && video.file_path) {
+                                // Cek agar tidak double start
+                                if (!streamManager.isRunning(stream.id)) {
+                                    console.log(`[SCHEDULER] Auto-Starting: ${stream.title}`);
+                                    streamManager.startStreamProcess(stream, video.file_path);
+                                    
+                                    // Update status jadi live
+                                    db.run("UPDATE streams SET status = 'live' WHERE id = ?", [stream.id]);
+                                }
+                            } else {
+                                console.error(`[SCHEDULER] Gagal start ${stream.title}: File video hilang.`);
+                            }
+                        });
+                    }
+                } 
                 
-                db.run("UPDATE streams SET status = 'live' WHERE id = ?", [stream.id]);
-            }
-
-            // 1.b LOGIKA RECOVERY (Jika app restart saat harusnya live)
-            if (stream.status === 'live') {
-                if (!streamManager.isRunning(stream.id)) {
-                     // Cek apakah masih dalam rentang waktu live
-                     if (now < nextEnd) {
-                        console.log(`[SCHEDULER] Recovering Stream ${stream.title}`);
-                        streamManager.startStreamProcess(stream, stream.file_path);
-                     } else {
-                        // Waktunya sudah lewat, paksa stop
-                        db.run("UPDATE streams SET status = 'offline' WHERE id = ?", [stream.id]);
-                     }
-                }
-            }
-
-            // 2. LOGIKA STOP
-            if (stream.status === 'live' && now >= nextEnd) {
-                console.log(`[SCHEDULER] Stopping Stream ${stream.title}`);
-                streamManager.stopStreamProcess(stream.id);
-
-                // 3. LOGIKA RESCHEDULE (DAILY ONLY)
-                if (stream.schedule_type === 'daily') {
-                    const nextDayStart = getTomorrowAt(stream.daily_start_time);
-                    const nextDayEnd = addHours(nextDayStart, stream.daily_duration_hours);
+                // ===============================================
+                // LOGIKA 2: WAKTUNYA BERHENTI (STOP & RESCHEDULE)
+                // ===============================================
+                else if (now >= end) {
                     
-                    console.log(`[SCHEDULER] Rescheduling Daily Stream ${stream.title} to ${nextDayStart}`);
+                    if (stream.schedule_type === 'daily') {
+                        // --- DAILY MODE (Harian) ---
+                        
+                        // 1. Matikan Stream (Silent Stop = True)
+                        // Agar status di DB tidak berubah jadi 'offline' oleh streamManager
+                        if (streamManager.isRunning(stream.id)) {
+                            console.log(`[SCHEDULER] Stopping Daily Stream (Rescheduling...)`);
+                            streamManager.stopStreamProcess(stream.id, true);
+                        }
 
-                    db.run(`UPDATE streams SET 
-                        status = 'scheduled', 
-                        next_start_time = ?, 
-                        next_end_time = ? 
-                        WHERE id = ?`, 
-                        [nextDayStart.toISOString(), nextDayEnd.toISOString(), stream.id]
-                    );
-                } else {
-                    // Mode ONCE
-                    db.run("UPDATE streams SET status = 'offline' WHERE id = ?", [stream.id]);
+                        // 2. Hitung Jadwal Berikutnya (Smart Midnight Logic)
+                        const timeParts = stream.daily_start_time.split(':');
+                        const targetHour = parseInt(timeParts[0]);
+                        const targetMinute = parseInt(timeParts[1]);
+
+                        // Mulai hitung dari "Sekarang"
+                        const nextStart = new Date(now); 
+                        nextStart.setHours(targetHour, targetMinute, 0, 0);
+
+                        // LOGIKA PINTAR:
+                        // Kasus: Sekarang jam 00:30, Jadwal jam 23:30.
+                        // 00:30 < 23:30? YA. Berarti jadwalnya HARI INI (Nanti malam).
+                        // Kasus: Sekarang jam 09:00, Jadwal jam 08:00.
+                        // 09:00 < 08:00? TIDAK. Berarti jadwalnya BESOK.
+                        
+                        if (now < nextStart) {
+                            console.log(`[SCHEDULER] Next run is TODAY at ${stream.daily_start_time}`);
+                            // Tanggal tetap hari ini
+                        } else {
+                            console.log(`[SCHEDULER] Next run is TOMORROW at ${stream.daily_start_time}`);
+                            nextStart.setDate(nextStart.getDate() + 1); // Tambah 1 hari
+                        }
+
+                        // Hitung Waktu Selesai (End Time) Baru
+                        const durationMinutes = parseInt(stream.daily_duration_minutes) || 0;
+                        const nextEnd = new Date(nextStart);
+                        nextEnd.setMinutes(nextEnd.getMinutes() + durationMinutes);
+
+                        // Update DB: Set waktu baru & status 'scheduled'
+                        db.run("UPDATE streams SET next_start_time = ?, next_end_time = ?, status = 'scheduled' WHERE id = ?",
+                            [nextStart.toISOString(), nextEnd.toISOString(), stream.id]);
+                    
+                    } else {
+                        // --- ONCE MODE (Sekali Jalan) ---
+                        if (streamManager.isRunning(stream.id)) {
+                            console.log(`[SCHEDULER] Stopping Once Stream`);
+                            streamManager.stopStreamProcess(stream.id, false); 
+                        }
+                        // Kembalikan ke 'scheduled' (bukan offline) agar user bisa start manual lagi kapan saja
+                        db.run("UPDATE streams SET status = 'scheduled' WHERE id = ?", [stream.id]);
+                    }
                 }
-            }
+            });
         });
     });
 };
-
-// Jalankan interval 30 detik
-setInterval(runScheduler, 30000);
 
 module.exports = { runScheduler };
