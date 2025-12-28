@@ -2,7 +2,7 @@
 require('dotenv').config();
 
 const express = require('express');
-const session = require('express-session'); // Library session
+const session = require('express-session');
 const multer = require('multer');
 const path = require('path');
 const db = require('./src/db');
@@ -37,32 +37,27 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 1. SETUP SESSION (SATPAM)
+// 1. SESSION
 app.use(session({
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: true,
-    cookie: { 
-        maxAge: 24 * 60 * 60 * 1000, // Login berlaku 24 jam
-        httpOnly: true 
-    }
+    cookie: { maxAge: 24 * 60 * 60 * 1000, httpOnly: true }
 }));
 
-// 2. FUNGSI CEK LOGIN
+// 2. AUTH CHECK
 const requireAuth = (req, res, next) => {
     if (req.session.loggedIn) {
-        next(); // Boleh lewat
+        next();
     } else {
-        // Kalau akses API tapi belum login -> Error 401
         if (req.path.startsWith('/api/')) {
             return res.status(401).json({ error: "Unauthorized. Please login." });
         }
-        // Kalau akses Web tapi belum login -> Tendang ke Login Page
         res.redirect('/login.html');
     }
 };
 
-// 3. ROUTE PUBLIC (Bisa diakses tanpa login)
+// 3. PUBLIC ROUTES
 app.use('/login.html', express.static(path.join(__dirname, 'public', 'login.html')));
 
 app.post('/auth/login', (req, res) => {
@@ -80,21 +75,17 @@ app.post('/auth/logout', (req, res) => {
     res.json({ success: true });
 });
 
-// 4. ROUTE PROTECTED (Harus Login Dulu)
-// Semua di bawah baris ini diproteksi oleh requireAuth
-app.use('/uploads', requireAuth, express.static('uploads')); // Video tidak bisa dibuka orang asing
-app.use('/', requireAuth, express.static('public')); // Dashboard terkunci
+// 4. PROTECTED ROUTES
+app.use('/uploads', requireAuth, express.static('uploads'));
+app.use('/', requireAuth, express.static('public'));
 
-// --- API ROUTES (Protected by requireAuth via middleware urutan di atas atau eksplisit) ---
+// --- API ROUTES ---
 const upload = multer({ storage: multer.diskStorage({
     destination: storage.paths.videos,
     filename: (req, f, cb) => cb(null, storage.getUniqueFilename(f.originalname))
 })});
 
-// System
 app.get('/api/system/stats', requireAuth, async (req, res) => { res.json(await getSystemStats()); });
-
-// Videos
 app.get('/api/videos', requireAuth, (req, res) => { db.all("SELECT * FROM videos ORDER BY created_at DESC", [], (e, r) => res.json(r)); });
 
 app.post('/api/videos/upload', requireAuth, upload.single('video'), async (req, res) => {
@@ -133,7 +124,6 @@ app.delete('/api/videos/:id', requireAuth, (req, res) => {
     });
 });
 
-// Streams
 app.get('/api/streams', requireAuth, (req, res) => { db.all("SELECT s.*, v.title as video_title FROM streams s LEFT JOIN videos v ON s.video_id = v.id ORDER BY s.created_at DESC", [], (e,r)=>res.json(r)); });
 
 app.post('/api/streams', requireAuth, (req, res) => {
@@ -159,7 +149,7 @@ app.post('/api/streams', requireAuth, (req, res) => {
     });
 });
 
-// --- PERBAIKAN: MENAMBAHKAN ROUTE UPDATE/EDIT ---
+// --- PERBAIKAN UTAMA DI SINI (EDIT STREAM) ---
 app.put('/api/streams/:id', requireAuth, (req, res) => {
     const { title, stream_key, video_id, schedule_type, start_time, daily_start_time, duration_hours, duration_minutes } = req.body;
     const id = req.params.id;
@@ -183,20 +173,23 @@ app.put('/api/streams/:id', requireAuth, (req, res) => {
         return res.status(400).json({error: "Format waktu salah"});
     }
 
+    // UPDATE: Kita tambahkan "status='scheduled'" dan "is_manual_run=0"
+    // Agar setiap kali di-save, dia dipaksa aktif lagi (bukan offline)
     const sql = `UPDATE streams SET 
         title=?, stream_key=?, video_id=?, schedule_type=?, 
         start_time=?, daily_start_time=?, daily_duration_minutes=?, 
-        next_start_time=?, next_end_time=? 
+        next_start_time=?, next_end_time=?,
+        status='scheduled', is_manual_run=0 
         WHERE id=?`;
 
     const params = [title, stream_key, video_id, schedule_type, start_time, daily_start_time, tm, ns, ne, id];
 
     db.run(sql, params, function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, message: "Stream updated" });
+        res.json({ success: true, message: "Stream updated & rescheduled" });
     });
 });
-// ------------------------------------------------
+// ---------------------------------------------
 
 app.post('/api/streams/:id/start', requireAuth, (req, res) => {
     const { manual, permanent } = req.body; const id = req.params.id;
