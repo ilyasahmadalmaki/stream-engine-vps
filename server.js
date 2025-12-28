@@ -86,9 +86,6 @@ app.use('/uploads', requireAuth, express.static('uploads')); // Video tidak bisa
 app.use('/', requireAuth, express.static('public')); // Dashboard terkunci
 
 // --- API ROUTES (Protected by requireAuth via middleware urutan di atas atau eksplisit) ---
-// Biar aman dobel, kita pasang requireAuth di endpoint sensitif atau andalkan middleware static di atas.
-// Karena API route didefinisikan manual, kita pasang requireAuth di depannya.
-
 const upload = multer({ storage: multer.diskStorage({
     destination: storage.paths.videos,
     filename: (req, f, cb) => cb(null, storage.getUniqueFilename(f.originalname))
@@ -141,13 +138,12 @@ app.get('/api/streams', requireAuth, (req, res) => { db.all("SELECT s.*, v.title
 
 app.post('/api/streams', requireAuth, (req, res) => {
     const { title, stream_key, video_id, schedule_type, start_time, daily_start_time, duration_hours, duration_minutes } = req.body;
-    // Logika simpan stream sama seperti sebelumnya...
+    
     db.get("SELECT id FROM streams WHERE title = ? OR stream_key = ?", [title, stream_key], (e, r) => {
         if(r) return res.status(400).json({error:"Judul/Key sudah ada!"});
         const tm = (parseInt(duration_hours||0)*60) + parseInt(duration_minutes||0);
         let ns=null, ne=null;
         
-        // Perhitungan waktu sederhana untuk init
         if(schedule_type==='daily'){
             const [h,m] = daily_start_time.split(':'); const d = new Date(); d.setHours(h,m,0,0);
             if(d<new Date()) d.setDate(d.getDate()+1);
@@ -162,6 +158,45 @@ app.post('/api/streams', requireAuth, (req, res) => {
         });
     });
 });
+
+// --- PERBAIKAN: MENAMBAHKAN ROUTE UPDATE/EDIT ---
+app.put('/api/streams/:id', requireAuth, (req, res) => {
+    const { title, stream_key, video_id, schedule_type, start_time, daily_start_time, duration_hours, duration_minutes } = req.body;
+    const id = req.params.id;
+
+    const tm = (parseInt(duration_hours||0)*60) + parseInt(duration_minutes||0);
+    let ns=null, ne=null;
+
+    try {
+        if(schedule_type === 'daily' && daily_start_time) {
+            const [h,m] = daily_start_time.split(':'); 
+            const d = new Date(); d.setHours(h,m,0,0);
+            if(d < new Date()) d.setDate(d.getDate()+1);
+            ns = d.toISOString(); 
+            const ed = new Date(d); ed.setMinutes(ed.getMinutes()+tm); ne = ed.toISOString();
+        } 
+        else if (schedule_type === 'once' && start_time) {
+            ns = start_time; 
+            const ed = new Date(ns); ed.setMinutes(ed.getMinutes()+tm); ne = ed.toISOString();
+        }
+    } catch (e) {
+        return res.status(400).json({error: "Format waktu salah"});
+    }
+
+    const sql = `UPDATE streams SET 
+        title=?, stream_key=?, video_id=?, schedule_type=?, 
+        start_time=?, daily_start_time=?, daily_duration_minutes=?, 
+        next_start_time=?, next_end_time=? 
+        WHERE id=?`;
+
+    const params = [title, stream_key, video_id, schedule_type, start_time, daily_start_time, tm, ns, ne, id];
+
+    db.run(sql, params, function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true, message: "Stream updated" });
+    });
+});
+// ------------------------------------------------
 
 app.post('/api/streams/:id/start', requireAuth, (req, res) => {
     const { manual, permanent } = req.body; const id = req.params.id;
