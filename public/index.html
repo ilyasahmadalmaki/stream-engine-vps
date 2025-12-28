@@ -80,17 +80,12 @@
             <div id="digital-clock" class="clock">00:00:00</div>
             <div id="date-display" class="date">...</div>
             <div id="system-stats" class="stats-box">CPU: -% | RAM: -</div>
+            <button onclick="logout()" style="margin-top:10px; background:transparent; border:1px solid #ef4444; color:#ef4444; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:0.8rem; transition:0.2s;" onmouseover="this.style.background='rgba(239, 68, 68, 0.1)'" onmouseout="this.style.background='transparent'">
+                🔒 Logout
+            </button>
         </div>
     </div>
-<div class="header-right">
-    <div id="digital-clock" class="clock">00:00:00</div>
-    <div id="date-display" class="date">...</div>
-    <div id="system-stats" class="stats-box">CPU: -% | RAM: -</div>
-    
-    <button onclick="logout()" style="margin-top:10px; background:transparent; border:1px solid #ef4444; color:#ef4444; padding:5px 10px; border-radius:4px; cursor:pointer;">
-        🔒 Logout
-    </button>
-</div>
+
     <div class="section-title">
         <span>📡 Active Streams</span>
         <button class="btn btn-primary" onclick="openModal('modal-stream')"><span>+ New Stream</span></button>
@@ -240,8 +235,6 @@
         async function fetchVideos() { try { const res = await fetch('/api/videos'); const videos = await res.json(); const tbody = document.getElementById('video-table-body'); const select = document.getElementById('stream-video'); tbody.innerHTML = ''; select.innerHTML = ''; videos.forEach(v => { const opt = document.createElement('option'); opt.value = v.id; opt.innerText = v.title; select.appendChild(opt); const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); 
             
             // LOGIKA PREVIEW PLAYER
-            // Backend menyimpan path lengkap: /root/app/uploads/video.mp4
-            // Kita ambil filename saja: video.mp4
             const filename = v.file_path.split('/').pop() || v.file_path.split('\\').pop();
             const safeTitle = v.title.replace(/'/g, "\\'"); // Escape petik satu
 
@@ -335,16 +328,17 @@
         function closeModal(id) { const el = document.getElementById(id); el.classList.remove('show'); setTimeout(() => { el.style.display = 'none'; if(id==='modal-stream'){ document.getElementById('edit-stream-id').value=''; document.getElementById('stream-title').value=''; document.getElementById('stream-key').value=''; } }, 300); }
 
         setInterval(() => { fetchStats(); fetchStreams(); }, 3000); fetchStats(); fetchStreams(); fetchVideos();
+
+        // LOGOUT FUNCTION
+        async function logout() {
+            if(!confirm('Keluar dari Dashboard?')) return;
+            try {
+                await fetch('/auth/logout', { method: 'POST' });
+                window.location.href = '/login.html';
+            } catch(e) {
+                alert('Gagal logout');
+            }
+        }
     </script>
-    // Tambahkan di dalam tag <script> paling bawah
-async function logout() {
-    if(!confirm('Keluar dari Dashboard?')) return;
-    try {
-        await fetch('/auth/logout', { method: 'POST' });
-        window.location.href = '/login.html';
-    } catch(e) {
-        alert('Gagal logout');
-    }
-}
 </body>
 </html>
