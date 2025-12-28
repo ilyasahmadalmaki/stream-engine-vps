@@ -1,73 +1,92 @@
 const os = require('os');
 const { exec } = require('child_process');
 
-// Helper untuk menghitung % CPU (Native tanpa library berat)
+// Helper: Ambil total tick CPU saat ini
+function getCpuInfo() {
+    const cpus = os.cpus();
+    let user = 0, nice = 0, sys = 0, idle = 0, irq = 0, total = 0;
+
+    for (let cpu in cpus) {
+        if (!cpus.hasOwnProperty(cpu)) continue;
+        user += cpus[cpu].times.user;
+        nice += cpus[cpu].times.nice;
+        sys += cpus[cpu].times.sys;
+        irq += cpus[cpu].times.irq;
+        idle += cpus[cpu].times.idle;
+    }
+    total = user + nice + sys + idle + irq;
+    return { idle, total };
+}
+
+// Helper: Hitung % CPU dengan delay 1 detik (Real-time sampling)
 function getCpuUsage() {
     return new Promise((resolve) => {
-        const cpus = os.cpus();
-        let idle = 0;
-        let total = 0;
+        const start = getCpuInfo();
         
-        cpus.forEach((cpu) => {
-            for (let type in cpu.times) {
-                total += cpu.times[type];
-            }
-            idle += cpu.times.idle;
-        });
-
-        const usage = 100 - Math.round(100 * idle / total);
-        resolve(usage); 
+        // Kita "tidur" 1 detik untuk mengambil sampel perbedaan
+        setTimeout(() => {
+            const end = getCpuInfo();
+            const idleDiff = end.idle - start.idle;
+            const totalDiff = end.total - start.total;
+            
+            // Hitung persentase
+            const percentage = 100 - Math.round(100 * idleDiff / totalDiff);
+            resolve(percentage);
+        }, 1000); 
     });
 }
 
-// Helper untuk cek Disk Space (Linux command: df -h)
+// Helper Disk (Versi Anti-Crash)
 function getDiskUsage() {
     return new Promise((resolve) => {
-        // Cek partisi root "/"
         exec('df -h /', (err, stdout) => {
-            if (err) {
-                return resolve({ total: '0G', used: '0G', percent: '0%' });
+            if (err || !stdout) {
+                return resolve({ total: '?', used: '?', percent: '0%' });
             }
-            
-            // Output df -h biasanya:
-            // Filesystem      Size  Used Avail Use% Mounted on
-            // /dev/root        25G   10G   15G  40% /
-            
-            const lines = stdout.trim().split('\n');
-            const lastLine = lines[lines.length - 1].replace(/\s+/g, ' '); // Hapus spasi ganda
-            const parts = lastLine.split(' ');
-            
-            // parts[1] = Size, parts[2] = Used, parts[4] = Use%
-            resolve({
-                total: parts[1],
-                used: parts[2],
-                percent: parts[4]
-            });
+            try {
+                const lines = stdout.trim().split('\n');
+                const lastLine = lines[lines.length - 1].replace(/\s+/g, ' '); 
+                const parts = lastLine.split(' ');
+                // Format df -h: Filesystem Size Used Avail Use% Mounted
+                resolve({
+                    total: parts[1],
+                    used: parts[2],
+                    percent: parts[4]
+                });
+            } catch (e) {
+                resolve({ total: '?', used: '?', percent: 'Err' });
+            }
         });
     });
 }
 
 const getSystemStats = async () => {
-    // 1. RAM
-    const totalMem = os.totalmem();
-    const freeMem = os.freemem();
-    const usedMem = totalMem - freeMem;
-    const memUsage = ((usedMem / totalMem) * 100).toFixed(1);
-    const totalMemGB = (totalMem / 1024 / 1024 / 1024).toFixed(1);
-    const usedMemGB = (usedMem / 1024 / 1024 / 1024).toFixed(1);
+    try {
+        // 1. CPU (Akan delay 1 detik di sini)
+        const cpuUsage = await getCpuUsage();
 
-    // 2. CPU
-    const cpuUsage = await getCpuUsage();
+        // 2. RAM
+        const totalMem = os.totalmem();
+        const freeMem = os.freemem();
+        const usedMem = totalMem - freeMem;
+        
+        const totalMemGB = (totalMem / 1024 / 1024 / 1024).toFixed(1);
+        const usedMemGB = (usedMem / 1024 / 1024 / 1024).toFixed(1);
+        const ramPercent = Math.round((usedMem / totalMem) * 100);
 
-    // 3. Disk
-    const disk = await getDiskUsage();
+        // 3. Disk
+        const disk = await getDiskUsage();
 
-    return {
-        cpu: cpuUsage,
-        ram: `${usedMemGB}/${totalMemGB} GB`,
-        ramUsage: memUsage,
-        disk: disk // Object { total, used, percent }
-    };
+        return {
+            cpu: cpuUsage || 0,
+            ram: `${usedMemGB}/${totalMemGB} GB (${ramPercent}%)`,
+            ramUsage: ramPercent,
+            disk: disk 
+        };
+    } catch (e) {
+        console.error("[STATS ERROR]", e);
+        return { cpu: 0, ram: "Error", disk: { percent: "Error" } };
+    }
 };
 
 module.exports = { getSystemStats };
