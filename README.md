@@ -80,9 +80,9 @@ nano .env
 Salin dan isi data berikut:
 
 Cuplikan kode
-
-# --- SERVER CONFIG ---
 ```
+# --- SERVER CONFIG ---
+
 PORT=7000
 SESSION_SECRET=kunci_rahasia_acak_bebas_isi_apa_aja_biar_aman
 
