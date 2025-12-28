@@ -82,7 +82,15 @@
             <div id="system-stats" class="stats-box">CPU: -% | RAM: -</div>
         </div>
     </div>
-
+<div class="header-right">
+    <div id="digital-clock" class="clock">00:00:00</div>
+    <div id="date-display" class="date">...</div>
+    <div id="system-stats" class="stats-box">CPU: -% | RAM: -</div>
+    
+    <button onclick="logout()" style="margin-top:10px; background:transparent; border:1px solid #ef4444; color:#ef4444; padding:5px 10px; border-radius:4px; cursor:pointer;">
+        🔒 Logout
+    </button>
+</div>
     <div class="section-title">
         <span>📡 Active Streams</span>
         <button class="btn btn-primary" onclick="openModal('modal-stream')"><span>+ New Stream</span></button>
@@ -328,5 +336,15 @@
 
         setInterval(() => { fetchStats(); fetchStreams(); }, 3000); fetchStats(); fetchStreams(); fetchVideos();
     </script>
+    // Tambahkan di dalam tag <script> paling bawah
+async function logout() {
+    if(!confirm('Keluar dari Dashboard?')) return;
+    try {
+        await fetch('/auth/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+    } catch(e) {
+        alert('Gagal logout');
+    }
+}
 </body>
 </html>
