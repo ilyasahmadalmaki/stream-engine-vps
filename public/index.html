@@ -173,172 +173,306 @@
     </div>
 
     <script>
-        function updateClock() { const now = new Date(); document.getElementById('digital-clock').innerText = now.toLocaleTimeString('id-ID', { hour12: false }); document.getElementById('date-display').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); }
-        setInterval(updateClock, 1000); updateClock();
+    // --- 1. SYSTEM CLOCK & UTILS ---
+    function updateClock() { 
+        const now = new Date(); 
+        document.getElementById('digital-clock').innerText = now.toLocaleTimeString('id-ID', { hour12: false }); 
+        document.getElementById('date-display').innerText = now.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); 
+    }
+    setInterval(updateClock, 1000); 
+    updateClock();
 
-        function showToast(msg, type = 'success') { const div = document.createElement('div'); div.className = `toast ${type}`; div.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <div>${msg}</div>`; document.getElementById('toast-container').appendChild(div); setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 300); }, 4000); }
+    function showToast(msg, type = 'success') { 
+        const div = document.createElement('div'); 
+        div.className = `toast ${type}`; 
+        div.innerHTML = `<span>${type === 'success' ? '✅' : '❌'}</span> <div>${msg}</div>`; 
+        document.getElementById('toast-container').appendChild(div); 
+        setTimeout(() => { div.style.opacity = '0'; setTimeout(() => div.remove(), 300); }, 4000); 
+    }
 
-        async function fetchStats() { 
-            try { 
-                const res = await fetch('/api/system/stats'); 
-                const data = await res.json(); 
-                
-                // Parse RAM
-                const ram = data.ram || '0/0 GB';
-                
-                // Parse Disk
-                const disk = data.disk || { used: '0', total: '0', percent: '0%' };
-                const diskPercent = parseInt(disk.percent.replace('%',''));
-                
-                // Warna Indikator Disk (Merah jika penuh > 90%)
-                let diskColor = 'var(--accent)';
-                if(diskPercent > 90) diskColor = 'var(--danger)';
-                else if(diskPercent > 70) diskColor = 'var(--warning)';
+    // --- 2. STATS & DATA FETCHING ---
+    async function fetchStats() { 
+        try { 
+            const res = await fetch('/api/system/stats'); 
+            const data = await res.json(); 
+            const ram = data.ram || '0/0 GB';
+            const disk = data.disk || { used: '0', total: '0', percent: '0%' };
+            const diskPercent = parseInt(disk.percent.replace('%',''));
+            let diskColor = 'var(--accent)';
+            if(diskPercent > 90) diskColor = 'var(--danger)';
+            else if(diskPercent > 70) diskColor = 'var(--warning)';
 
-                document.getElementById('system-stats').innerHTML = `
-                    CPU: ${data.cpu}% &nbsp;|&nbsp; 
-                    RAM: ${ram} &nbsp;|&nbsp; 
-                    <span style="color:${diskColor}">💾 ${disk.percent} (${disk.used}/${disk.total})</span>
-                `; 
-            } catch(e) {} 
+            document.getElementById('system-stats').innerHTML = `
+                CPU: ${data.cpu}% &nbsp;|&nbsp; 
+                RAM: ${ram} &nbsp;|&nbsp; 
+                <span style="color:${diskColor}">💾 ${disk.percent} (${disk.used}/${disk.total})</span>
+            `; 
+        } catch(e) {} 
+    }
+
+    let currentStreams = [];
+    async function fetchStreams() { 
+        try { 
+            const res = await fetch('/api/streams'); 
+            currentStreams = await res.json(); 
+            renderStreams(currentStreams); 
+        } catch(e) {} 
+    }
+
+    function renderStreams(streams) {
+        const container = document.getElementById('stream-container'); 
+        container.innerHTML = '';
+        if(streams.length === 0) { 
+            container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); border:2px dashed var(--border); border-radius:12px;">Belum ada jadwal. Klik "+ New Stream" untuk memulai.</div>`; 
+            return; 
         }
+        streams.forEach(s => {
+            let badgeClass = 'status-offline'; 
+            let statusText = s.status;
+            if(s.status === 'live') { badgeClass = 'status-live'; statusText = s.is_manual_run ? '● LIVE (MANUAL)' : '● LIVE NOW'; }
+            else if(s.status === 'scheduled') { badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; }
+            if (s.schedule_type === 'manual' && s.status !== 'live') { badgeClass = 'status-manual'; statusText = '🎛 MANUAL MODE'; }
 
-        let currentStreams = [];
-        async function fetchStreams() { try { const res = await fetch('/api/streams'); currentStreams = await res.json(); renderStreams(currentStreams); } catch(e) {} }
+            let timeDisplay = s.schedule_type === 'manual' ? '<span style="color:var(--text-secondary)">-- Manual Start --</span>' : (s.schedule_type === 'daily' ? `<span style="color:var(--accent)">🔁 Daily:</span> ${s.daily_start_time}` : `📅 ${new Date(s.start_time).toLocaleString('id-ID')}`);
+            const nextRun = s.schedule_type === 'manual' ? '-' : new Date(s.next_start_time).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
 
-        function renderStreams(streams) {
-            const container = document.getElementById('stream-container'); container.innerHTML = '';
-            if(streams.length === 0) { container.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:40px; color:var(--text-secondary); border:2px dashed var(--border); border-radius:12px;">Belum ada jadwal. Buat baru yuk!</div>`; return; }
-            streams.forEach(s => {
-                let badgeClass = 'status-offline'; let statusText = s.status;
-                if(s.status === 'live') { badgeClass = 'status-live'; statusText = s.is_manual_run ? '● LIVE (MANUAL)' : '● LIVE NOW'; }
-                else if(s.status === 'scheduled') { badgeClass = 'status-scheduled'; statusText = '⏱ SCHEDULED'; }
-                if (s.schedule_type === 'manual' && s.status !== 'live') { badgeClass = 'status-manual'; statusText = '🎛 MANUAL MODE'; }
-
-                let timeDisplay = s.schedule_type === 'manual' ? '<span style="color:var(--text-secondary)">-- Tidak ada jadwal --</span>' : (s.schedule_type === 'daily' ? `<span style="color:var(--accent)">🔁 Daily:</span> ${s.daily_start_time}` : `📅 ${new Date(s.start_time).toLocaleString('id-ID')}`);
-                const nextRun = s.schedule_type === 'manual' ? '-' : new Date(s.next_start_time).toLocaleString('id-ID', { weekday: 'short', hour: '2-digit', minute:'2-digit' });
-
-                container.innerHTML += `
-                    <div class="card">
-                        <div class="card-header"><div class="stream-title" title="${s.title}">${s.title}</div><div class="badge ${badgeClass}">${statusText}</div></div>
-                        <div class="info-row"><span>🎬</span> <span>${s.video_title || 'Video Deleted'}</span></div>
-                        <div class="info-row"><span>⏰</span> <span>${timeDisplay}</span></div>
-                        <div class="info-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)"><span style="font-size:0.8rem">⏭ Next: <b>${nextRun}</b></span></div>
-                        <div style="display:flex; gap:10px; margin-top:20px;">
-                            ${s.status !== 'live' ? `<button class="btn btn-sm btn-success" style="flex:1" onclick="startStream(${s.id})">▶ Start</button><button class="btn btn-sm btn-secondary" onclick="editStream(${s.id})">✏</button>` : `<button class="btn btn-sm btn-danger" style="flex:1" onclick="stopStream(${s.id})">⏹ STOP</button>`}
-                            <button class="btn btn-sm btn-secondary" onclick="deleteStream(${s.id})">🗑</button>
-                        </div>
-                    </div>`;
-            });
-        }
-
-        async function fetchVideos() { try { const res = await fetch('/api/videos'); const videos = await res.json(); const tbody = document.getElementById('video-table-body'); const select = document.getElementById('stream-video'); tbody.innerHTML = ''; select.innerHTML = ''; videos.forEach(v => { const opt = document.createElement('option'); opt.value = v.id; opt.innerText = v.title; select.appendChild(opt); const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); 
-            
-            // LOGIKA PREVIEW PLAYER
-            const filename = v.file_path.split('/').pop() || v.file_path.split('\\').pop();
-            const safeTitle = v.title.replace(/'/g, "\\'"); // Escape petik satu
-
-            tbody.innerHTML += `<tr>
-                <td>
-                    <div class="thumb-box" onclick="playVideo('${filename}', '${safeTitle}')">
-                        <img src="${v.thumbnail_path || ''}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'">
+            container.innerHTML += `
+                <div class="card">
+                    <div class="card-header"><div class="stream-title" title="${s.title}">${s.title}</div><div class="badge ${badgeClass}">${statusText}</div></div>
+                    <div class="info-row"><span>🎬</span> <span>${s.video_title || 'Video Deleted'}</span></div>
+                    <div class="info-row"><span>⏰</span> <span>${timeDisplay}</span></div>
+                    <div class="info-row" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--border)"><span style="font-size:0.8rem">⏭ Next: <b>${nextRun}</b></span></div>
+                    <div style="display:flex; gap:10px; margin-top:20px;">
+                        ${s.status !== 'live' ? `<button class="btn btn-sm btn-success" style="flex:1" onclick="startStream(${s.id})">▶ Start</button><button class="btn btn-sm btn-secondary" onclick="editStream(${s.id})">✏</button>` : `<button class="btn btn-sm btn-danger" style="flex:1" onclick="stopStream(${s.id})">⏹ STOP</button>`}
+                        <button class="btn btn-sm btn-secondary" onclick="deleteStream(${s.id})">🗑</button>
                     </div>
-                </td>
-                <td><div style="font-weight:600; font-size:0.95rem">${v.title}</div><div class="video-meta">${v.source_type} • ${sizeMB} MB</div></td>
-                <td><span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">${v.file_size > 0 ? 'Ready' : 'Corrupt'}</span></td>
-                <td style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${safeTitle}')">✏ Rename</button><button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button></td>
-            </tr>`; }); } catch(e) {} }
+                </div>`;
+        });
+    }
 
-        async function startStream(id) {
-            const s = currentStreams.find(x => x.id === id);
-            let payload = { manual: true, permanent: false };
-            if (s && s.schedule_type !== 'manual') { 
-                const msg = `⚠️ PERINGATAN UBAH MODE\n\nStream "${s.title}" memiliki Jadwal Otomatis.\n\nKlik OK untuk mengubah stream ini menjadi:\n👉 MODE MANUAL (PERMANEN)\n\nJadwal lama akan dihapus. Yakin?`;
-                if (!confirm(msg)) return;
-                payload.permanent = true;
+    async function fetchVideos() { 
+        try { 
+            const res = await fetch('/api/videos'); 
+            const videos = await res.json(); 
+            const tbody = document.getElementById('video-table-body'); 
+            const select = document.getElementById('stream-video'); 
+            tbody.innerHTML = ''; 
+            select.innerHTML = ''; 
+            
+            if(videos.length === 0) {
+                select.innerHTML = '<option value="">-- Upload Video Dulu --</option>';
             }
-            showToast('Menyalakan mesin... 🚀');
+
+            videos.forEach(v => { 
+                const opt = document.createElement('option'); 
+                opt.value = v.id; 
+                opt.innerText = v.title; 
+                select.appendChild(opt); 
+                
+                const sizeMB = (v.file_size / 1024 / 1024).toFixed(1); 
+                const filename = v.file_path.split('/').pop() || v.file_path.split('\\').pop();
+                const safeTitle = v.title.replace(/'/g, "\\'"); 
+
+                tbody.innerHTML += `<tr>
+                    <td>
+                        <div class="thumb-box" onclick="playVideo('${filename}', '${safeTitle}')">
+                            <img src="${v.thumbnail_path || ''}" class="thumb-img" onerror="this.src='https://placehold.co/100x56/black/white?text=No+Img'">
+                        </div>
+                    </td>
+                    <td><div style="font-weight:600; font-size:0.95rem">${v.title}</div><div class="video-meta">${v.source_type} • ${sizeMB} MB</div></td>
+                    <td><span style="font-size:0.8rem; color:${v.file_size > 0 ? 'var(--success)':'var(--danger)'}">${v.file_size > 0 ? 'Ready' : 'Corrupt'}</span></td>
+                    <td style="text-align:right"><button class="btn btn-sm btn-secondary" onclick="renameVideo(${v.id}, '${safeTitle}')">✏ Rename</button><button class="btn btn-sm btn-danger" onclick="deleteVideo(${v.id})">🗑</button></td>
+                </tr>`; 
+            }); 
+        } catch(e) {} 
+    }
+
+    // --- 3. CORE FUNCTIONS (SAVE, START, STOP) ---
+    
+    // FUNGSI SAVE YANG SUDAH DIPERBAIKI (LEBIH CEREWET)
+    async function saveStream() { 
+        // A. Ambil Data
+        const title = document.getElementById('stream-title').value;
+        const key = document.getElementById('stream-key').value;
+        const videoId = document.getElementById('stream-video').value;
+        const id = document.getElementById('edit-stream-id').value;
+        
+        // B. Validasi (Biar ketahuan kalau ada yang kosong)
+        if(!title) return showToast('Judul Stream wajib diisi!', 'error');
+        if(!key) return showToast('Stream Key wajib diisi!', 'error');
+        if(!videoId) return showToast('Pilih Video dulu! (Upload jika kosong)', 'error');
+
+        // C. Efek Loading di Tombol
+        const btn = document.querySelector('#modal-stream .btn-primary');
+        const originalText = btn.innerText;
+        btn.innerText = 'Menyimpan...'; 
+        btn.disabled = true;
+
+        try {
+            const method = id ? 'PUT' : 'POST'; 
+            const url = id ? `/api/streams/${id}` : '/api/streams'; 
+            
+            const data = { 
+                title: title, 
+                stream_key: key, 
+                video_id: videoId, 
+                schedule_type: document.getElementById('schedule-type').value, 
+                daily_start_time: document.getElementById('daily-start').value, 
+                start_time: document.getElementById('once-start').value, 
+                duration_hours: document.getElementById('dur-h').value, 
+                duration_minutes: document.getElementById('dur-m').value 
+            }; 
+            
+            const res = await fetch(url, { 
+                method: method, 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(data) 
+            }); 
+            
+            const json = await res.json(); 
+            
+            if(json.success) { 
+                showToast('Jadwal berhasil disimpan!'); 
+                closeModal('modal-stream'); 
+                fetchStreams(); 
+            } else { 
+                showToast(json.error || 'Gagal menyimpan', 'error'); 
+            }
+        } catch (e) {
+            showToast('Error koneksi: ' + e.message, 'error');
+        } finally {
+            // D. Balikin Tombol
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    async function startStream(id) {
+        const s = currentStreams.find(x => x.id === id);
+        let payload = { manual: true, permanent: false };
+        if (s && s.schedule_type !== 'manual') { 
+            const msg = `⚠️ UBAH KE MANUAL?\n\nStream ini punya jadwal otomatis.\nKlik OK untuk mengubah jadi MODE MANUAL (Jadwal lama akan dihapus).`;
+            if (!confirm(msg)) return;
+            payload.permanent = true;
+        }
+        showToast('Menyalakan mesin... 🚀');
+        try {
             const res = await fetch(`/api/streams/${id}/start`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
             const json = await res.json();
             if(!json.success) showToast(json.error, 'error'); else { showToast('Stream ON!'); fetchStreams(); }
-        }
+        } catch(e) { showToast('Gagal connect server', 'error'); }
+    }
 
-        async function saveStream() { const id = document.getElementById('edit-stream-id').value; const method = id ? 'PUT' : 'POST'; const url = id ? `/api/streams/${id}` : '/api/streams'; const data = { title: document.getElementById('stream-title').value, stream_key: document.getElementById('stream-key').value, video_id: document.getElementById('stream-video').value, schedule_type: document.getElementById('schedule-type').value, daily_start_time: document.getElementById('daily-start').value, start_time: document.getElementById('once-start').value, duration_hours: document.getElementById('dur-h').value, duration_minutes: document.getElementById('dur-m').value }; const res = await fetch(url, { method: method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) }); const json = await res.json(); if(json.success) { showToast('Jadwal disimpan!'); closeModal('modal-stream'); fetchStreams(); } else { showToast(json.error, 'error'); } }
-
-        function editStream(id) { const s = currentStreams.find(x => x.id === id); if(!s) return; document.getElementById('edit-stream-id').value = s.id; document.getElementById('stream-title').value = s.title; document.getElementById('stream-key').value = s.stream_key; document.getElementById('stream-video').value = s.video_id; document.getElementById('schedule-type').value = s.schedule_type; toggleScheduleType(); if(s.schedule_type === 'daily') { document.getElementById('daily-start').value = s.daily_start_time; } else if(s.schedule_type === 'once') { const d = new Date(s.start_time); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); document.getElementById('once-start').value = d.toISOString().slice(0,16); } openModal('modal-stream'); }
-        async function stopStream(id) { if(!confirm('Matikan Stream ini?')) return; await fetch(`/api/streams/${id}/stop`, {method:'POST'}); fetchStreams(); }
-        async function deleteStream(id) { if(!confirm('Hapus jadwal ini?')) return; await fetch(`/api/streams/${id}`, {method:'DELETE'}); fetchStreams(); }
-        async function renameVideo(id, old) { const n = prompt("Judul Baru:", old); if(n && n!==old) { await fetch(`/api/videos/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:n})}); fetchVideos(); }}
-        async function deleteVideo(id) { if(!confirm('Hapus file video?')) return; await fetch(`/api/videos/${id}`, {method:'DELETE'}); fetchVideos(); }
+    function editStream(id) { 
+        const s = currentStreams.find(x => x.id === id); 
+        if(!s) return; 
+        document.getElementById('edit-stream-id').value = s.id; 
+        document.getElementById('stream-title').value = s.title; 
+        document.getElementById('stream-key').value = s.stream_key; 
+        document.getElementById('stream-video').value = s.video_id; 
+        document.getElementById('schedule-type').value = s.schedule_type; 
+        toggleScheduleType(); 
         
-        function uploadVideoLocal() {
-            const file = document.getElementById('file-upload').files[0];
-            if(!file) return showToast('Pilih file dulu', 'error');
-            const formData = new FormData();
-            formData.append('video', file);
-            const pBar = document.getElementById('upload-progress-bar');
-            const pContainer = document.getElementById('upload-progress-container');
-            const pText = document.getElementById('upload-progress-text');
-            const btn = document.getElementById('btn-upload-local');
-            pContainer.style.display = 'block'; pText.style.display = 'block'; btn.disabled = true; btn.innerText = 'Uploading...';
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', '/api/videos/upload', true);
-            xhr.upload.onprogress = function(e) { if (e.lengthComputable) { const percentComplete = (e.loaded / e.total) * 100; pBar.style.width = percentComplete + '%'; pText.innerText = Math.round(percentComplete) + '%'; } };
-            xhr.onload = function() { if (xhr.status === 200) { showToast('Upload Selesai!'); closeModal('modal-upload'); fetchVideos(); } else { showToast('Upload Gagal', 'error'); } btn.disabled = false; btn.innerText = 'Start Upload 🚀'; pContainer.style.display = 'none'; pText.style.display = 'none'; pBar.style.width = '0%'; };
-            xhr.onerror = function() { showToast('Network Error', 'error'); btn.disabled = false; };
-            xhr.send(formData);
-        }
+        if(s.schedule_type === 'daily') { 
+            document.getElementById('daily-start').value = s.daily_start_time; 
+        } else if(s.schedule_type === 'once') { 
+            const d = new Date(s.start_time); 
+            d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); 
+            document.getElementById('once-start').value = d.toISOString().slice(0,16); 
+        } 
+        openModal('modal-stream'); 
+    }
 
-        async function importVideoDrive() {
-            const url = document.getElementById('gdrive-url').value;
-            if(!url) return showToast('Masukkan URL Drive', 'error');
-            const btn = document.getElementById('btn-import-drive');
-            const statusBox = document.getElementById('import-status');
-            btn.disabled = true; btn.innerText = 'Downloading di Server...'; statusBox.style.display = 'block';
-            try {
-                const res = await fetch('/api/videos/import', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url }) });
-                const json = await res.json();
-                if(json.success) { showToast('Download Selesai!'); closeModal('modal-import'); fetchVideos(); } else { showToast(json.error, 'error'); }
-            } catch (e) { showToast('Error koneksi', 'error'); }
-            btn.disabled = false; btn.innerText = 'Download to VPS ☁'; statusBox.style.display = 'none';
-        }
+    async function stopStream(id) { if(!confirm('Matikan Stream ini?')) return; await fetch(`/api/streams/${id}/stop`, {method:'POST'}); fetchStreams(); }
+    async function deleteStream(id) { if(!confirm('Hapus jadwal ini?')) return; await fetch(`/api/streams/${id}`, {method:'DELETE'}); fetchStreams(); }
+    async function renameVideo(id, old) { const n = prompt("Judul Baru:", old); if(n && n!==old) { await fetch(`/api/videos/${id}`, {method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({title:n})}); fetchVideos(); }}
+    async function deleteVideo(id) { if(!confirm('Hapus file video?')) return; await fetch(`/api/videos/${id}`, {method:'DELETE'}); fetchVideos(); }
+    
+    // --- 4. UPLOAD & IMPORT HANDLERS ---
+    function uploadVideoLocal() {
+        const file = document.getElementById('file-upload').files[0];
+        if(!file) return showToast('Pilih file dulu', 'error');
+        
+        const formData = new FormData();
+        formData.append('video', file);
+        
+        const pBar = document.getElementById('upload-progress-bar');
+        const pContainer = document.getElementById('upload-progress-container');
+        const pText = document.getElementById('upload-progress-text');
+        const btn = document.getElementById('btn-upload-local');
+        
+        pContainer.style.display = 'block'; pText.style.display = 'block'; 
+        btn.disabled = true; btn.innerText = 'Uploading...';
+        
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/videos/upload', true);
+        xhr.upload.onprogress = function(e) { if (e.lengthComputable) { const percentComplete = (e.loaded / e.total) * 100; pBar.style.width = percentComplete + '%'; pText.innerText = Math.round(percentComplete) + '%'; } };
+        xhr.onload = function() { if (xhr.status === 200) { showToast('Upload Selesai!'); closeModal('modal-upload'); fetchVideos(); } else { showToast('Upload Gagal', 'error'); } btn.disabled = false; btn.innerText = 'Start Upload 🚀'; pContainer.style.display = 'none'; pText.style.display = 'none'; pBar.style.width = '0%'; };
+        xhr.onerror = function() { showToast('Network Error', 'error'); btn.disabled = false; };
+        xhr.send(formData);
+    }
 
-        // --- VIDEO PLAYER LOGIC ---
-        function playVideo(filename, title) {
-            const player = document.getElementById('video-element');
-            const titleEl = document.getElementById('video-player-title');
-            
-            // Set Source (Asumsi server serve /uploads route)
-            player.src = '/uploads/' + filename;
-            titleEl.innerText = title;
-            
-            openModal('modal-player');
-            player.play();
-        }
+    async function importVideoDrive() {
+        const url = document.getElementById('gdrive-url').value;
+        if(!url) return showToast('Masukkan URL Drive', 'error');
+        const btn = document.getElementById('btn-import-drive');
+        const statusBox = document.getElementById('import-status');
+        btn.disabled = true; btn.innerText = 'Downloading di Server...'; statusBox.style.display = 'block';
+        try {
+            const res = await fetch('/api/videos/import', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url }) });
+            const json = await res.json();
+            if(json.success) { showToast('Download Selesai!'); closeModal('modal-import'); fetchVideos(); } else { showToast(json.error, 'error'); }
+        } catch (e) { showToast('Error koneksi', 'error'); }
+        btn.disabled = false; btn.innerText = 'Download to VPS ☁'; statusBox.style.display = 'none';
+    }
 
-        function closePlayer() {
-            const player = document.getElementById('video-element');
-            player.pause();
-            player.src = ""; // Clear buffer
-            closeModal('modal-player');
-        }
+    // --- 5. UI UTILS (MODAL, PLAYER, LOGOUT) ---
+    function playVideo(filename, title) {
+        const player = document.getElementById('video-element');
+        player.src = '/uploads/' + filename;
+        document.getElementById('video-player-title').innerText = title;
+        openModal('modal-player');
+        player.play();
+    }
+    function closePlayer() {
+        const player = document.getElementById('video-element');
+        player.pause(); player.src = ""; closeModal('modal-player');
+    }
+    function toggleScheduleType() { 
+        const t = document.getElementById('schedule-type').value; 
+        const timeArea = document.getElementById('time-settings'); 
+        if (t === 'manual') { 
+            timeArea.style.display = 'none'; 
+        } else { 
+            timeArea.style.display = 'block'; 
+            document.getElementById('input-daily').style.display = t === 'daily'?'block':'none'; 
+            document.getElementById('input-once').style.display = t === 'once'?'block':'none'; 
+        } 
+    }
+    function openModal(id) { 
+        const el = document.getElementById(id); el.style.display = 'flex'; 
+        setTimeout(() => el.classList.add('show'), 10); 
+        if(id === 'modal-stream' && !document.getElementById('edit-stream-id').value) { toggleScheduleType(); } 
+    }
+    function closeModal(id) { 
+        const el = document.getElementById(id); el.classList.remove('show'); 
+        setTimeout(() => { 
+            el.style.display = 'none'; 
+            if(id==='modal-stream'){ 
+                document.getElementById('edit-stream-id').value=''; 
+                document.getElementById('stream-title').value=''; 
+                document.getElementById('stream-key').value=''; 
+            } 
+        }, 300); 
+    }
+    async function logout() {
+        if(!confirm('Keluar dari Dashboard?')) return;
+        try { await fetch('/auth/logout', { method: 'POST' }); window.location.href = '/login.html'; } catch(e) {}
+    }
 
-        function toggleScheduleType() { const t = document.getElementById('schedule-type').value; const timeArea = document.getElementById('time-settings'); if (t === 'manual') { timeArea.style.display = 'none'; } else { timeArea.style.display = 'block'; document.getElementById('input-daily').style.display = t === 'daily'?'block':'none'; document.getElementById('input-once').style.display = t === 'once'?'block':'none'; } }
-        function openModal(id) { const el = document.getElementById(id); el.style.display = 'flex'; setTimeout(() => el.classList.add('show'), 10); if(id === 'modal-stream' && !document.getElementById('edit-stream-id').value) { toggleScheduleType(); } }
-        function closeModal(id) { const el = document.getElementById(id); el.classList.remove('show'); setTimeout(() => { el.style.display = 'none'; if(id==='modal-stream'){ document.getElementById('edit-stream-id').value=''; document.getElementById('stream-title').value=''; document.getElementById('stream-key').value=''; } }, 300); }
-
-        setInterval(() => { fetchStats(); fetchStreams(); }, 3000); fetchStats(); fetchStreams(); fetchVideos();
-
-        // LOGOUT FUNCTION
-        async function logout() {
-            if(!confirm('Keluar dari Dashboard?')) return;
-            try {
-                await fetch('/auth/logout', { method: 'POST' });
-                window.location.href = '/login.html';
-            } catch(e) {
-                alert('Gagal logout');
-            }
-        }
-    </script>
+    // --- 6. INIT ---
+    setInterval(() => { fetchStats(); fetchStreams(); }, 3000); 
+    fetchStats(); fetchStreams(); fetchVideos();
+</script>
 </body>
 </html>
