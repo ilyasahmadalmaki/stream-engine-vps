@@ -1,40 +1,38 @@
 # 📡 StreamEngine PRO (v2.0 Final)
 
-**StreamEngine PRO** adalah sistem otomatisasi Live Streaming YouTube 24/7 berbasis VPS (Linux). Sistem ini mengubah VPS Anda menjadi "Stasiun TV" pribadi yang bisa berjalan non-stop tanpa perlu menyalakan komputer/laptop di rumah.
+**StreamEngine PRO** adalah sistem otomatisasi Live Streaming YouTube 24/7 berbasis VPS (Linux) yang ringan dan tangguh. Sistem ini dirancang untuk mengubah VPS murah sekalipun menjadi "Stasiun TV" pribadi yang berjalan non-stop.
 
-Dilengkapi dengan **Web Dashboard Modern** (Dark Mode) untuk manajemen file, dan **Telegram Bot Assistant** untuk kontrol jarak jauh via HP.
+Dilengkapi dengan **Web Dashboard Modern** (Dark Mode) yang aman, serta **Telegram Bot Assistant** canggih untuk kontrol jarak jauh.
 
 ---
 
-## 🔥 Fitur Unggulan
+## 🔥 Fitur Utama
 
-### 🖥️ Backend & Core
-- **Auto-Heal System:** Otomatis mendeteksi jika stream crash (error 152/224) dan menyalakannya kembali dalam 1 menit.
+### 🖥️ Backend & Core System
+- **Auto-Heal System:** Otomatis mendeteksi stream yang crash (error 152/224) dan menyalakannya kembali dalam 1 menit.
 - **Smart Scheduler:**
   - 🔁 **Harian (Daily):** Live otomatis jam X, mati jam Y (berulang tiap hari).
   - 📅 **Sekali (Once):** Live pada tanggal & jam tertentu.
-  - 🎛 **Manual:** Start/Stop sesuka hati via tombol.
-- **FFmpeg Optimized:** Racikan khusus untuk VPS hemat RAM (Low-Latency, Reconnect, Anti-Buffer).
+  - 🎛 **Manual:** Start/Stop sesuka hati via tombol tanpa batasan waktu.
+- **FFmpeg Optimized:** Racikan script khusus untuk VPS hemat RAM (Low-Latency, Auto Reconnect, Anti-Buffer).
 
-### 🔒 Keamanan & Dashboard
-- **Secure Login:** Halaman login dengan proteksi Session (Anti-Hacker).
-- **Resource Monitor:** Cek CPU, RAM, dan Disk Usage secara Real-time.
+### 🔒 Web Dashboard (Secure)
+- **Login Protection:** Akses dashboard dikunci dengan password & session (Anti-Hacker).
+- **Resource Monitor:** Pantau penggunaan CPU, RAM, dan Disk secara Real-time.
 - **File Manager:**
-  - ⬆ **Upload Local:** Upload video dari komputer.
-  - ☁ **Import GDrive:** Download video langsung dari Google Drive ke VPS (Hemat kuota internet Anda).
-- **Video Preview:** Nonton/cek video langsung di dashboard sebelum dilive-kan.
+  - ⬆ **Upload Local:** Upload video dari komputer/HP.
+  - ☁ **Import GDrive:** Download video langsung dari Google Drive ke VPS (Super Cepat & Hemat Kuota).
+- **Video Preview:** Cek video di player sebelum dilive-kan.
 
-### 📱 Telegram Bot (V5)
-- **Wizard Mode:** Tambah jadwal live baru lewat tanya-jawab interaktif.
+### 📱 Telegram Bot (V5 - Wizard Mode)
+- **Wizard Setup:** Tambah jadwal live baru lewat tanya-jawab interaktif (Tanpa perlu buka Web).
 - **Remote Control:** Start, Stop, dan Hapus jadwal dari HP.
 - **Status Check:** Cek kesehatan server (CPU/RAM) dari chat.
-- **Notifikasi:** Laporan otomatis saat Live dimulai atau jika terjadi error.
+- **Realtime Notif:** Laporan otomatis saat Live dimulai, berhenti, atau jika terjadi error.
 
 ---
 
-## 🛠️ Instalasi (VPS Baru)
-
-Panduan ini untuk **Ubuntu 20.04 / 22.04 LTS**.
+## 🛠️ Panduan Instalasi (VPS Ubuntu/Debian)
 
 ### 1. Persiapan System & Dependency
 Update server dan install tool wajib (FFmpeg, Node.js, Git).
@@ -43,15 +41,14 @@ Update server dan install tool wajib (FFmpeg, Node.js, Git).
 # Update Server
 sudo apt update && sudo apt upgrade -y
 
-# Install FFmpeg & Tools
+# Install FFmpeg & Tools dasar
 sudo apt install ffmpeg git curl unzip -y
 
-# Install Node.js 18.x (Terbaru Stabil)
+# Install Node.js 18.x (Versi Stabil)
 curl -fsSL [https://deb.nodesource.com/setup_18.x](https://deb.nodesource.com/setup_18.x) | sudo -E bash -
 sudo apt install -y nodejs
-
-Setup SWAP Memory (WAJIB!)
-Agar VPS tidak crash saat live lama, kita buat RAM tambahan (Virtual Memory) sebesar 2GB.
+2. Setup SWAP Memory (WAJIB!)
+Agar VPS tidak crash (Error 152/224) saat live berjam-jam, kita buat RAM tambahan (Virtual Memory) sebesar 2GB dari Hardisk.
 
 Bash
 
@@ -60,29 +57,30 @@ sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-
-Install Aplikasi
+3. Install Aplikasi
 Bash
 
-# Clone Repository (Ganti dengan Link GitHub Anda)
+# Clone Repository (Ganti Link dengan Repo GitHub Anda)
 git clone [https://github.com/USERNAME_ANDA/stream-engine-vps.git](https://github.com/USERNAME_ANDA/stream-engine-vps.git)
+
+# Masuk folder
 cd stream-engine-vps
 
-# Install Library JavaScript
+# Install Library Pendukung
 npm install
-
-⚙️ Konfigurasi (.env)
-Buat file bernama .env di dalam folder project untuk menyimpan password dan token rahasia.
+⚙️ Konfigurasi Rahasia (.env)
+Buat file bernama .env di dalam folder project. File ini menyimpan password dashboard dan token bot.
 
 Bash
 
 nano .env
+Salin dan isi data berikut:
 
 Cuplikan kode
 
 # --- SERVER CONFIG ---
 PORT=7000
-SESSION_SECRET=kunci_rahasia_acak_bebas_isi_apa_aja
+SESSION_SECRET=kunci_rahasia_acak_bebas_isi_apa_aja_biar_aman
 
 # --- LOGIN DASHBOARD ---
 ADMIN_USER=admin
@@ -91,20 +89,20 @@ ADMIN_PASS=password_rahasia_anda
 # --- TELEGRAM BOT ---
 # Buat bot di @BotFather untuk dapat token
 TELEGRAM_BOT_TOKEN=123456789:ABCDefGhiJklMnoPqrStuVwxyz
-# Biarkan kosong dulu, nanti bot akan memberitahu ID Anda saat klik /start
+
+# Biarkan kosong dulu, bot akan memberitahu ID Anda saat klik /start
 TELEGRAM_CHAT_ID=
+(Simpan file: Tekan Ctrl+X, lalu Y, lalu Enter)
 
-Simpan dengan Ctrl+X, lalu Y, lalu Enter.
-
-🚀 Menjalankan Server (Auto-Start)
-Kita gunakan Systemd agar aplikasi otomatis nyala saat VPS restart.
+🚀 Menjalankan Server (Auto-Start Systemd)
+Gunakan Systemd agar aplikasi otomatis menyala sendiri saat VPS restart.
 
 Buat File Service:
 
 Bash
 
 sudo nano /etc/systemd/system/stream-engine.service
-Isi File (Sesuaikan path /root/stream-engine-vps dengan lokasi folder Anda):
+Isi File: (Sesuaikan /root/stream-engine-vps dengan lokasi folder asli Anda)
 
 Ini, TOML
 
@@ -134,63 +132,69 @@ Cek Status:
 Bash
 
 sudo systemctl status stream-engine
-📖 Panduan Penggunaan
+📖 Cara Penggunaan
 🌐 1. Web Dashboard
-Akses: Buka browser dan ketik http://IP-VPS-ANDA:7000.
+Akses: Buka browser HP/Laptop, ketik http://IP-VPS-ANDA:7000.
 
 Login: Masukkan Username & Password sesuai file .env.
 
-Upload Video: Klik "Import Drive" (rekomendasi) atau "Upload Local".
+Menu Utama:
 
-Buat Jadwal: Klik + New Stream -> Isi Judul, Key, Pilih Video -> Pilih Mode (Manual/Harian).
+Active Streams: Melihat status live (Hijau=Live, Biru=Terjadwal, Abu=Offline).
 
-Edit Jadwal: Klik ikon pensil (✏️) pada kartu stream. Jangan lupa klik Save.
+Video Library: Upload video baru atau Import link GDrive.
+
+Membuat Jadwal: Klik + New Stream -> Isi data -> Pilih Mode (Manual/Harian).
+
+Edit Jadwal: Klik ikon pensil (✏️) -> Ubah -> Save.
 
 📱 2. Telegram Bot
-Buka bot Anda di Telegram, klik Start.
+Cari bot Anda di Telegram, klik Start.
 
-Jika ID Anda belum terdaftar, bot akan memberikan ID. Masukkan ID tersebut ke file .env (bagian TELEGRAM_CHAT_ID), lalu restart server.
+Jika ID belum terdaftar, bot akan mengirim ID Anda. Masukkan ke .env dan restart server.
 
-Menu:
+Menu Tombol:
 
-/dashboard : Tombol kontrol Live (Start/Stop).
+📊 Cek Status: Melihat beban CPU, RAM, dan Sisa Disk.
 
-/add : Wizard tambah stream baru (Tanya-jawab otomatis).
+🎛 Dashboard: Start/Stop stream yang sudah ada.
 
-/gallery : List video & hapus video.
+📂 Galeri Video: Melihat daftar video & menghapus file.
 
-/status : Cek beban CPU & RAM VPS.
+➕ Tambah Stream: Wizard otomatis untuk setup live baru.
 
 ❓ Troubleshooting (Masalah Umum)
-1. Bot Telegram Tidak Merespon Biasanya token salah atau server mati. Cek log:
+1. Bot Telegram Diam / Tidak Merespon Biasanya token salah atau server mati. Cek log error:
 
 Bash
 
 journalctl -u stream-engine -f
-2. Error "Unexpected token <" di Web Dashboard Itu artinya sesi login habis tapi browser masih cache halaman lama.
+2. Web Dashboard Error "Unexpected token <" Ini terjadi jika sesi login habis tapi browser masih menyimpan cache lama.
 
-Solusi: Refresh halaman (F5) -> Login Ulang.
+Solusi: Refresh halaman (F5) -> Anda akan diarahkan ke Login -> Login Ulang.
 
-3. Stream Crash (Code 152 / 224)
+3. Stream Crash (Exit Code 152 / 224)
 
-Code 152: CPU Limit. VPS terlalu lemah. Pastikan jangan buka aplikasi berat lain.
+Code 152: CPU Limit. VPS terlalu lemah atau ada proses lain yang berat.
 
-Code 224: Koneksi putus atau RAM penuh. Pastikan langkah Setup SWAP di atas sudah dilakukan.
+Code 224: Koneksi RTO atau RAM Penuh. Pastikan langkah Setup SWAP di atas sudah dilakukan.
 
-4. Update Kode dari GitHub Jika Anda mengupdate kode di GitHub, cara update di VPS:
+4. Update Kode dari GitHub Jika Anda melakukan perubahan kode di GitHub, update VPS dengan cara:
 
 Bash
 
 cd stream-engine-vps
 git pull origin main
 systemctl restart stream-engine
-📂 Struktur Folder
+📂 Struktur Folder Project
 server.js : Otak utama aplikasi (API & Server).
 
-src/ : Logika backend (FFmpeg, Telegram, Scheduler, Database).
+src/ : Folder Logika backend (Database, FFmpeg, Bot, Scheduler).
 
 public/ : Tampilan Web (HTML/CSS/JS).
 
-uploads/ : Folder penyimpanan video (Tidak di-upload ke GitHub).
+uploads/ : Folder penyimpanan video (Diabaikan oleh Git).
 
-stream.db : Database SQLite (Jadwal & Data Video).
+stream.db : Database SQLite (Menyimpan jadwal & data video).
+
+Dibuat oleh: Ilyas Ahmad ALmaki Lisensi: Private / Personal Use
