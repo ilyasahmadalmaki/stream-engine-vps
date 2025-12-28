@@ -47,38 +47,42 @@ sudo apt install ffmpeg git curl unzip -y
 # Install Node.js 18.x (Versi Stabil)
 curl -fsSL [https://deb.nodesource.com/setup_18.x](https://deb.nodesource.com/setup_18.x) | sudo -E bash -
 sudo apt install -y nodejs
-2. Setup SWAP Memory (WAJIB!)
+```
+###2. Setup SWAP Memory (WAJIB!)
 Agar VPS tidak crash (Error 152/224) saat live berjam-jam, kita buat RAM tambahan (Virtual Memory) sebesar 2GB dari Hardisk.
 
-Bash
+```Bash
 
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
 3. Install Aplikasi
-Bash
+```Bash
 
 # Clone Repository (Ganti Link dengan Repo GitHub Anda)
 git clone [https://github.com/USERNAME_ANDA/stream-engine-vps.git](https://github.com/USERNAME_ANDA/stream-engine-vps.git)
 
 # Masuk folder
 cd stream-engine-vps
-
+```
 # Install Library Pendukung
 npm install
 ⚙️ Konfigurasi Rahasia (.env)
 Buat file bernama .env di dalam folder project. File ini menyimpan password dashboard dan token bot.
 
-Bash
+```Bash
 
 nano .env
+```
 Salin dan isi data berikut:
 
 Cuplikan kode
 
 # --- SERVER CONFIG ---
+```
 PORT=7000
 SESSION_SECRET=kunci_rahasia_acak_bebas_isi_apa_aja_biar_aman
 
@@ -89,7 +93,7 @@ ADMIN_PASS=password_rahasia_anda
 # --- TELEGRAM BOT ---
 # Buat bot di @BotFather untuk dapat token
 TELEGRAM_BOT_TOKEN=123456789:ABCDefGhiJklMnoPqrStuVwxyz
-
+```
 # Biarkan kosong dulu, bot akan memberitahu ID Anda saat klik /start
 TELEGRAM_CHAT_ID=
 (Simpan file: Tekan Ctrl+X, lalu Y, lalu Enter)
@@ -99,9 +103,10 @@ Gunakan Systemd agar aplikasi otomatis menyala sendiri saat VPS restart.
 
 Buat File Service:
 
-Bash
+```Bash
 
 sudo nano /etc/systemd/system/stream-engine.service
+```
 Isi File: (Sesuaikan /root/stream-engine-vps dengan lokasi folder asli Anda)
 
 Ini, TOML
@@ -122,16 +127,17 @@ RestartSec=10
 WantedBy=multi-user.target
 Aktifkan Service:
 
-Bash
+```Bash
 
 sudo systemctl daemon-reload
 sudo systemctl enable stream-engine
 sudo systemctl start stream-engine
 Cek Status:
-
-Bash
+```
+```Bash
 
 sudo systemctl status stream-engine
+```
 📖 Cara Penggunaan
 🌐 1. Web Dashboard
 Akses: Buka browser HP/Laptop, ketik http://IP-VPS-ANDA:7000.
